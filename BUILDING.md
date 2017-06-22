@@ -28,5 +28,4 @@ If you want to crosscompile the routing agent, you will find a few
 examples in the [`cmake/cross` directory](../master/cmake/cross). To compile the code with OpenWRT, you
 can use the repository (or a local copy) as an OpenWRT feed.
 
-You will find more information in our wiki:
-http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework
+You will find more information in the [OLSR wiki](http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework).
