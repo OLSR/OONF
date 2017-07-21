@@ -255,7 +255,7 @@ static struct netaddr_str         _value_link_dualstack;
 static struct netaddr_str         _value_link_mac;
 static char                       _value_link_flood_local[TEMPLATE_JSON_BOOL_LENGTH];
 static char                       _value_link_flood_remote[TEMPLATE_JSON_BOOL_LENGTH];
-static char                       _value_link_willingness[3];
+static char                       _value_link_willingness[4];
 
 static struct netaddr_str         _value_link_address;
 
