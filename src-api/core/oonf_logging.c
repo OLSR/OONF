@@ -52,6 +52,7 @@
 
 #include "common/autobuf.h"
 #include "common/list.h"
+#include "common/math.h"
 #include "common/string.h"
 #include "core/oonf_libdata.h"
 #include "core/oonf_logging.h"
@@ -353,7 +354,7 @@ struct timeval now;
     return NULL;
   }
   snprintf(buf->buf, sizeof(buf->buf), "%02d:%02d:%02d.%03ld",
-      tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 1000);
+      tm->tm_hour, tm->tm_min, tm->tm_sec, MAX(MIN(now.tv_usec / 1000, 999), 0));
   return buf->buf;
 }
 
