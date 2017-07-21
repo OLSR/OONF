@@ -880,7 +880,11 @@ static void do_tests(bool do_random) {
   test_remove_all_macro(do_random);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-overflow"
 int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))) {
+  int r;
+
   BEGIN_TESTING(clear_elements);
 
   do_tests(false);
@@ -888,5 +892,7 @@ int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))
   test_random_insert();
   test_for_each_key_macros();
 
-  return FINISH_TESTING();
+  r = FINISH_TESTING();
+  return r;
 }
+#pragma GCC diagnostic pop
