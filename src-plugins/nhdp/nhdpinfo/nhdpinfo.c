@@ -281,7 +281,7 @@ static struct nhdp_metric_str     _value_domain_metric_internal;
 static char                       _value_domain_mpr[NHDP_DOMAIN_MPR_MAXLEN];
 static char                       _value_domain_mpr_local[TEMPLATE_JSON_BOOL_LENGTH];
 static char                       _value_domain_mpr_remote[TEMPLATE_JSON_BOOL_LENGTH];
-static char                       _value_domain_mpr_will[3];
+static char                       _value_domain_mpr_will[4];
 
 
 /* definition of the template data entries for JSON and table output */
