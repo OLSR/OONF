@@ -47,6 +47,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common/compiler.h"
 #include "common/isonumber.h"
 #include "common/string.h"
 
@@ -221,27 +222,27 @@ isonumber_to_u64(uint64_t *dst, const char *iso, int fraction, bool binary) {
     switch (next[0]) {
       case 'E':
         factor *= multiplicator;
-        __attribute__ ((fallthrough));
+        FALLTHROUGH;
         /* no break */
       case 'P':
         factor *= multiplicator;
-        __attribute__ ((fallthrough));
+        FALLTHROUGH;
         /* no break */
       case 'T':
         factor *= multiplicator;
-        __attribute__ ((fallthrough));
+        FALLTHROUGH;
         /* no break */
       case 'G':
         factor *= multiplicator;
-        __attribute__ ((fallthrough));
+        FALLTHROUGH;
         /* no break */
       case 'M':
         factor *= multiplicator;
-        __attribute__ ((fallthrough));
+        FALLTHROUGH;
         /* no break */
       case 'k':
         factor *= multiplicator;
-        __attribute__ ((fallthrough));
+        FALLTHROUGH;
         /* no break */
       case ' ':
         break;
