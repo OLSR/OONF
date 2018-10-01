@@ -62,6 +62,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              http
                              mpr
                              remotecontrol
+                             route_modifier
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 
