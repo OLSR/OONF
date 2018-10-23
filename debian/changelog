@@ -1,0 +1,6 @@
+olsrd (0.15.1-1) unstable; urgency=low
+
+  [ Henning Rogge ]
+  * Bugfix release 0.15.1, mostly lan_import and DLEP
+
+ -- Christoph Loesch <debian-mail@chil.at>  Tue, 23 Oct 2018 10:51:21 +0100
