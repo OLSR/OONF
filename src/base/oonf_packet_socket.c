@@ -312,6 +312,7 @@ oonf_packet_apply_managed(struct oonf_packet_managed *managed, const struct oonf
     os_interface_remove(&managed->_if_listener);
 
     /* create new interface listener */
+    managed->_if_listener.name = managed->_managed_config.interface;
     managed->_if_listener.mesh = managed->_managed_config.mesh;
     os_interface_add(&managed->_if_listener);
   }
