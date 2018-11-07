@@ -115,10 +115,10 @@ const struct netaddr NETADDR_MAC48_BROADCAST = { { 0xff, 0xff, 0xff, 0xff, 0xff,
   AF_MAC48, 48 };
 
 /*! Ethernet multicast prefix for IPv4 multicast */
-const struct netaddr NETADDR_MAC48_IPV4_MULTICAST = { { 0x01, 0x00, 0x5e, 0x00, 0x00, 0x00 }, AF_MAC48, 25 };
+const struct netaddr NETADDR_MAC48_IPV4_MULTICAST = { { 0x01, 0x00, 0x5e, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, AF_MAC48, 25 };
 
 /*! Ethernet multicast prefix for IPv4 multicast */
-const struct netaddr NETADDR_MAC48_IPV6_MULTICAST = { { 0x33, 0x33, 0x00, 0x00, 0x00, 0x00 }, AF_MAC48, 16 };
+const struct netaddr NETADDR_MAC48_IPV6_MULTICAST = { { 0x33, 0x33, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  }, AF_MAC48, 16 };
 
 /*! socket for binding to any IPv4 address */
 const union netaddr_socket NETADDR_SOCKET_IPV4_ANY = { .v4 = {

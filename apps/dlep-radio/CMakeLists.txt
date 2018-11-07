@@ -34,6 +34,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              socket
                              stream_socket
                              telnet
+                             http
                              timer
                              viewer
                              os_clock
@@ -44,6 +45,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              cfg_compact
                              layer2info
                              systeminfo
+                             remotecontrol
                              layer2_config
                              layer2_import
                              dlep_radio
