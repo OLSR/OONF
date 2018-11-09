@@ -344,6 +344,9 @@ oonf_stream_add_managed(struct oonf_stream_managed *managed) {
   if (managed->config.session_timeout == 0) {
     managed->config.session_timeout = 120000;
   }
+  if (managed->config.acl == NULL) {
+    managed->config.acl = &managed->_managed_config.acl;
+  }
 
   managed->_if_listener.if_changed = _cb_interface_listener;
   managed->_if_listener.name = managed->_managed_config.interface;
