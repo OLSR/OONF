@@ -91,6 +91,9 @@ enum {
 static int _init(void);
 static void _cleanup(void);
 
+static struct os_system_netlink_socket *_add_protocol(int32_t protocol);
+static void _remove_protocol(struct os_system_netlink_socket *nl_socket);
+
 static void _cb_handle_netlink_timeout(struct oonf_timer_instance *);
 static void _netlink_handler(struct oonf_socket_entry *entry);
 
@@ -166,7 +169,7 @@ static int _ioctl_v4, _ioctl_v6;
 /* tree of netlink protocols */
 static struct avl_tree _netlink_protocol_tree;
 
-static struct oonf_class _netlink_protocol = {
+static struct oonf_class _netlink_protocol_class = {
   .name = "netlink protocol",
   .size = sizeof(struct os_system_netlink_socket),
 };
@@ -197,7 +200,7 @@ _init(void) {
 
   oonf_timer_add(&_netlink_timer);
   avl_init(&_netlink_protocol_tree, avl_comp_int32, false);
-  oonf_class_add(&_netlink_protocol);
+  oonf_class_add(&_netlink_protocol_class);
   return 0;
 }
 
@@ -206,7 +209,12 @@ _init(void) {
  */
 static void
 _cleanup(void) {
-  oonf_class_remove(&_netlink_protocol);
+  struct os_system_netlink_socket *nlp, *nlp_it;
+
+  avl_for_each_element_safe(&_netlink_protocol_tree, nlp, _node, nlp_it) {
+    _remove_protocol(nlp);
+  }
+  oonf_class_remove(&_netlink_protocol_class);
   oonf_timer_remove(&_netlink_timer);
   close(_ioctl_v4);
   if (_ioctl_v6 != -1) {
@@ -290,90 +298,6 @@ os_system_linux_linux_get_ioctl_fd(int af_type) {
   }
 }
 
-static struct os_system_netlink_socket *
-_add_netlink(int32_t protocol) {
-  struct os_system_netlink_socket *nl_sock;
-  static uint32_t socket_id = 0;
-  struct sockaddr_nl addr;
-  int recvbuf;
-  int fd;
-
-  nl_sock = avl_find_element(&_netlink_protocol_tree, &protocol, nl_sock, _node);
-  if (nl_sock) {
-    return nl_sock;
-  }
-  
-  nl_sock = oonf_class_malloc(&_netlink_protocol);
-  if (!nl_sock) {
-    return NULL;
-  }
-
-  fd = socket(PF_NETLINK, SOCK_RAW, protocol);
-  if (fd < 0) {
-    OONF_WARN(LOG_OS_SYSTEM, "Cannot open netlink socket type %d: %s (%d)",
-              protocol, strerror(errno), errno);
-    goto os_add_netlink_fail;
-  }
-
-  if (os_fd_init(&nl_sock->nl_socket.fd, fd)) {
-    OONF_WARN(LOG_OS_SYSTEM, "Netlink %d: Could not initialize socket representation", protocol);
-    goto os_add_netlink_fail;
-  }
-  nl_sock->in = calloc(1, NETLINK_MESSAGE_BLOCK_SIZE);
-  if (nl_sock->in == NULL) {
-    OONF_WARN(LOG_OS_SYSTEM, "Netlink type %d: Not enough memory for input buffer", protocol);
-    goto os_add_netlink_fail;
-  }
-  nl_sock->in_max_len = NETLINK_MESSAGE_BLOCK_SIZE;
-
-  memset(&addr, 0, sizeof(addr));
-  addr.nl_family = AF_NETLINK;
-  addr.nl_pid = (((uint32_t)getpid()) & ((1u<<22)-1)) + (socket_id << 22);
-  nl_sock->pid = addr.nl_pid;
-  socket_id++;
-
-#if defined(SO_RCVBUF)
-  recvbuf = 65536;
-  if (setsockopt(nl_sock->nl_socket.fd.fd, SOL_SOCKET, SO_RCVBUF, &recvbuf, sizeof(recvbuf))) {
-    OONF_WARN(LOG_OS_SYSTEM,
-    "Netlink type %d: Cannot setup receive buffer size for socket: %s (%d)\n",
-    protocol, strerror(errno), errno);
-  }
-#endif
-
-  if (bind(nl_sock->nl_socket.fd.fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    OONF_WARN(LOG_OS_SYSTEM, "Netlink type %d: Could not bind socket: %s (%d)", protocol, strerror(errno), errno);
-    goto os_add_netlink_fail;
-  }
-
-  nl_sock->nl_socket.name = "os_system_netlink";
-  nl_sock->nl_socket.process = _netlink_handler;
-  oonf_socket_add(&nl_sock->nl_socket);
-  oonf_socket_set_read(&nl_sock->nl_socket, true);
-
-  nl_sock->timeout.class = &_netlink_timer;
-
-  OONF_DEBUG(LOG_OS_SYSTEM, "Netlink type %d: Bound netlink socket pid %u",
-            protocol, addr.nl_pid);
-
-  nl_sock->netlink_type = protocol;
-  nl_sock->_node.key = &nl_sock->netlink_type;
-  avl_insert(&_netlink_protocol_tree, &nl_sock->_node);
-
-  list_init_head(&nl_sock->buffered_messages);
-  list_init_head(&nl_sock->sent_messages);
-  list_init_head(&nl_sock->handlers);
-  return nl_sock;
-
-os_add_netlink_fail:
-  os_fd_invalidate(&nl_sock->nl_socket.fd);
-  if (fd != -1) {
-    close(fd);
-  }
-  free(nl_sock->in);
-  return NULL;
-}
-
 /**
  * Open a new bidirectional netlink socket
  * @param nl pointer to initialized netlink socket handler
@@ -383,7 +307,7 @@ os_add_netlink_fail:
 int
 os_system_linux_netlink_add(struct os_system_netlink *nl, int protocol) {
   size_t i;
-  nl->nl_socket = _add_netlink(protocol);
+  nl->nl_socket = _add_protocol(protocol);
   if (!nl->nl_socket) {
     return -1;
   }
@@ -399,18 +323,6 @@ os_system_linux_netlink_add(struct os_system_netlink *nl, int protocol) {
   
   list_add_tail(&nl->nl_socket->handlers, &nl->_node);
   return 0;
-}
-
-static void 
-_remove_protocol(struct os_system_netlink_socket *nl_socket) {
-  if (os_fd_is_initialized(&nl_socket->nl_socket.fd)) {
-    oonf_socket_remove(&nl_socket->nl_socket);
-
-    os_fd_close(&nl_socket->nl_socket.fd);
-  }
-  free(nl_socket->in);
-  avl_remove(&_netlink_protocol_tree, &nl_socket->_node);
-  oonf_class_free(&_netlink_protocol, nl_socket);
 }
 
 /**
@@ -508,6 +420,111 @@ os_system_linux_netlink_addreq(struct os_system_netlink_message *nl_msg, int typ
 }
 
 /**
+* Add new protocol instance of netlink socket
+* @param protocol protocol id
+* @return pointer to new netlink protocol, NULL if failed to allocate
+*/
+static struct os_system_netlink_socket *
+_add_protocol(int32_t protocol) {
+  struct os_system_netlink_socket *nl_sock;
+  static uint32_t socket_id = 0;
+  struct sockaddr_nl addr;
+  int recvbuf;
+  int fd;
+
+  nl_sock = avl_find_element(&_netlink_protocol_tree, &protocol, nl_sock, _node);
+  if (nl_sock) {
+    return nl_sock;
+  }
+  
+  nl_sock = oonf_class_malloc(&_netlink_protocol_class);
+  if (!nl_sock) {
+    return NULL;
+  }
+
+  fd = socket(PF_NETLINK, SOCK_RAW, protocol);
+  if (fd < 0) {
+    OONF_WARN(LOG_OS_SYSTEM, "Cannot open netlink socket type %d: %s (%d)",
+              protocol, strerror(errno), errno);
+    goto os_add_netlink_fail;
+  }
+
+  if (os_fd_init(&nl_sock->nl_socket.fd, fd)) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink %d: Could not initialize socket representation", protocol);
+    goto os_add_netlink_fail;
+  }
+  nl_sock->in = calloc(1, NETLINK_MESSAGE_BLOCK_SIZE);
+  if (nl_sock->in == NULL) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink type %d: Not enough memory for input buffer", protocol);
+    goto os_add_netlink_fail;
+  }
+  nl_sock->in_max_len = NETLINK_MESSAGE_BLOCK_SIZE;
+
+  memset(&addr, 0, sizeof(addr));
+  addr.nl_family = AF_NETLINK;
+  addr.nl_pid = (((uint32_t)getpid()) & ((1u<<22)-1)) + (socket_id << 22);
+  nl_sock->pid = addr.nl_pid;
+  socket_id++;
+
+#if defined(SO_RCVBUF)
+  recvbuf = 65536;
+  if (setsockopt(nl_sock->nl_socket.fd.fd, SOL_SOCKET, SO_RCVBUF, &recvbuf, sizeof(recvbuf))) {
+    OONF_WARN(LOG_OS_SYSTEM,
+    "Netlink type %d: Cannot setup receive buffer size for socket: %s (%d)\n",
+    protocol, strerror(errno), errno);
+  }
+#endif
+
+  if (bind(nl_sock->nl_socket.fd.fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink type %d: Could not bind socket: %s (%d)", protocol, strerror(errno), errno);
+    goto os_add_netlink_fail;
+  }
+
+  nl_sock->nl_socket.name = "os_system_netlink";
+  nl_sock->nl_socket.process = _netlink_handler;
+  oonf_socket_add(&nl_sock->nl_socket);
+  oonf_socket_set_read(&nl_sock->nl_socket, true);
+
+  nl_sock->timeout.class = &_netlink_timer;
+
+  OONF_DEBUG(LOG_OS_SYSTEM, "Netlink type %d: Bound netlink socket pid %u",
+            protocol, addr.nl_pid);
+
+  nl_sock->netlink_type = protocol;
+  nl_sock->_node.key = &nl_sock->netlink_type;
+  avl_insert(&_netlink_protocol_tree, &nl_sock->_node);
+
+  list_init_head(&nl_sock->buffered_messages);
+  list_init_head(&nl_sock->sent_messages);
+  list_init_head(&nl_sock->handlers);
+  return nl_sock;
+
+os_add_netlink_fail:
+  os_fd_invalidate(&nl_sock->nl_socket.fd);
+  if (fd != -1) {
+    close(fd);
+  }
+  free(nl_sock->in);
+  return NULL;
+}
+
+/**
+* Remove netlink protocol instance
+* @param nl_socket netlink protocol instance
+*/
+static void 
+_remove_protocol(struct os_system_netlink_socket *nl_socket) {
+  if (os_fd_is_initialized(&nl_socket->nl_socket.fd)) {
+    oonf_socket_remove(&nl_socket->nl_socket);
+
+    os_fd_close(&nl_socket->nl_socket.fd);
+  }
+  free(nl_socket->in);
+  avl_remove(&_netlink_protocol_tree, &nl_socket->_node);
+  oonf_class_free(&_netlink_protocol_class, nl_socket);
+}
+
+/**
  * Handle timeout of netlink acks
  * @param ptr timer instance that fired
  */
@@ -529,6 +546,11 @@ _cb_handle_netlink_timeout(struct oonf_timer_instance *ptr) {
 }
 
 static void
+/**
+* Collects a block of non-dumping (or a single dumping query) and sends them out
+* to the kernel netlink subsystem
+* @param nl_socket netlink protocol instance
+*/
 _send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
   struct os_system_netlink_message *nl_msg, *nl_msg_it;
   size_t i, count, size;
@@ -623,6 +645,12 @@ _send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
   }
 }
 
+/**
+* Find a netlink message in transfer with a specific sequence number
+* @param nl_socket netlink protocol instance
+* @param seqno netlink sequence number
+* @return netlink message, NULL if not found
+*/
 static struct os_system_netlink_message *
 _find_matching_message(struct os_system_netlink_socket *nl_socket, uint32_t seqno) {
   struct os_system_netlink_message *nl_msg;

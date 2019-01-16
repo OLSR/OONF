@@ -111,7 +111,7 @@ static struct route_type_translation _type_translation[] = { { OS_ROUTE_UNICAST,
 /* netlink socket for route set/get commands */
 static const uint32_t _rtnetlink_mcast[] = { RTNLGRP_IPV4_ROUTE, RTNLGRP_IPV6_ROUTE };
 
-static struct os_system_netlink _rtnetlink_socket = {
+static struct os_system_netlink _rtnetlink_handler = {
   .name = "routing send",
   .used_by = &_oonf_os_routing_subsystem,
   
@@ -150,7 +150,7 @@ static bool _is_kernel_3_11_0_or_better;
  */
 static int
 _init(void) {
-  if (os_system_linux_netlink_add(&_rtnetlink_socket, NETLINK_ROUTE)) {
+  if (os_system_linux_netlink_add(&_rtnetlink_handler, NETLINK_ROUTE)) {
     return -1;
   }
  
@@ -165,9 +165,7 @@ _init(void) {
  */
 static void
 _cleanup(void) {
-  /* TODO: remove out netlink handler */
-
-  os_system_linux_netlink_remove(&_rtnetlink_socket);
+  os_system_linux_netlink_remove(&_rtnetlink_handler);
 }
 
 /**
@@ -257,7 +255,7 @@ os_routing_linux_set(struct os_route *route, bool set, bool del_similar) {
   }
 
   /* cannot fail */
-  os_system_linux_netlink_send(&_rtnetlink_socket, &route->_internal.msg);
+  os_system_linux_netlink_send(&_rtnetlink_handler, &route->_internal.msg);
   return 0;
 }
 
@@ -295,7 +293,7 @@ os_routing_linux_query(struct os_route *route) {
   msg->nlmsg_type = RTM_GETROUTE;
   rt_gen->rtgen_family = route->p.family;
 
-  os_system_linux_netlink_send(&_rtnetlink_socket, &route->_internal.msg);
+  os_system_linux_netlink_send(&_rtnetlink_handler, &route->_internal.msg);
   return 0;
 }
 
@@ -597,7 +595,7 @@ _match_routes(struct os_route *filter, struct os_route *route) {
 }
 
 /**
- * Handle incoming rtnetlink messages
+ * Handle incoming rtnetlink multicast messages
  * @param msg netlink message including header
  */
 static void
@@ -635,7 +633,7 @@ _cb_rtnetlink_multicast(struct os_system_netlink *nl __attribute__((unused)), st
 }
 
 /**
- * Handle incoming rtnetlink messages
+ * Handle incoming response for rtnetlink query
  * @param msg netlink message including header
  */
 static void
@@ -673,9 +671,8 @@ _cb_rtnetlink_response(struct os_system_netlink_message *msg, struct nlmsghdr *h
 }
 
 /**
- * Handle feedback from netlink socket
- * @param seq sequence number of netlink response
- * @param err error value
+ * Handle negative feedback from netlink socket
+ * @param nl_masg netlink message the feedback is for
  */
 static void
 _cb_rtnetlink_error(struct os_system_netlink_message *nl_msg) {
@@ -692,8 +689,8 @@ _cb_rtnetlink_error(struct os_system_netlink_message *nl_msg) {
 }
 
 /**
- * Handle done from multipart netlink messages
- * @param seq netlink sequence number
+ * Handle positive feedback from netlink socket
+ * @param nl_masg netlink message the feedback is for
  */
 static void
 _cb_rtnetlink_done(struct os_system_netlink_message *nl_msg) {

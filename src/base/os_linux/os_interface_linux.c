@@ -218,7 +218,7 @@ static struct avl_tree _interface_data_tree;
 static const char _ANY_INTERFACE[] = OS_INTERFACE_ANY;
 
 /**
- * Initialize os-specific subsystem
+ * Initialize os-specific interface subsystem
  * @return -1 if an error happened, 0 otherwise
  */
 static int
@@ -271,7 +271,7 @@ _init(void) {
 }
 
 /**
- * Cleanup os-specific subsystem
+ * Cleanup os-specific interface subsystem
  */
 static void
 _cleanup(void) {
@@ -1142,6 +1142,11 @@ _address_parse_nlmsg(const char *ifname, struct nlmsghdr *msg) {
   }
 }
 
+/**
+* Process a response to a netlink query
+* @param nl_msg original netlink query
+* @param hdr response of the kernel
+*/
 static void 
 _cb_rtnetlink_response(struct os_system_netlink_message *nl_msg, struct nlmsghdr *hdr) {
   _cb_rtnetlink_multicast(nl_msg->originator, hdr);
@@ -1183,8 +1188,7 @@ _cb_rtnetlink_multicast(struct os_system_netlink *nl __attribute__((unused)), st
 
 /**
  * Handle feedback from netlink socket
- * @param seq sequence number of netlink message
- * @param error error code
+ * @param nl_msg netlink message we got feedback/timeout for
  */
 static void
 _cb_rtnetlink_feedback(struct os_system_netlink_message *nl_msg) {
