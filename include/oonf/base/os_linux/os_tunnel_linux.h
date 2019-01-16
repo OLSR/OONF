@@ -48,8 +48,7 @@
 
 #include <oonf/oonf.h>
 #include <oonf/base/os_tunnel.h>
-
-struct os_tunnel_internal {};
+#include <oonf/base/os_linux/os_tunnel_linux_data.h>
 
 EXPORT int os_tunnel_linux_add(struct os_tunnel *tunnel);
 EXPORT int os_tunnel_linux_remove(struct os_tunnel *tunnel);

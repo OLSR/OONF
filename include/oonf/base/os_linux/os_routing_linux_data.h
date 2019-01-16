@@ -43,13 +43,36 @@
  * @file
  */
 
-#ifndef NL80211_GET_MPP_H_
-#define NL80211_GET_MPP_H_
+#ifndef OS_ROUTING_LINUX_DATA_H_
+#define OS_ROUTING_LINUX_DATA_H_
 
-#include <oonf/generic/nl80211_listener/nl80211_listener.h>
+struct os_route_internal;
+struct os_route_listener_internal;
 
-void nl80211_send_get_mpp(
-  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
-void nl80211_process_get_mpp_result(struct nl80211_if *interf, struct nlmsghdr *);
+#include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
+#include <oonf/libcommon/list.h>
+#include <oonf/base/os_system.h>
 
-#endif /* NL80211_GET_MPP_H_ */
+/**
+ * linux specifc data for changing a kernel route
+ */
+struct os_route_internal {
+  /*! hook into list of route change handlers */
+  struct avl_node _node;
+
+  struct os_system_netlink_message msg;
+
+  /* (well aligned) buffer for netlink message */
+  uint64_t nl_buffer[256/sizeof(uint64_t)];
+};
+
+/**
+ * linux specific data for listening to kernel route changes
+ */
+struct os_route_listener_internal {
+  /*! hook into list of kernel route listeners */
+  struct list_entity _node;
+};
+
+#endif /* OS_ROUTING_LINUX_DATA_H_ */

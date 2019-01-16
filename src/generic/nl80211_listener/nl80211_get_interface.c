@@ -89,20 +89,19 @@ static uint64_t _get_bandwidth(uint32_t width);
 
 /**
  * Send a netlink message to get the nl80211 interface information
- * @param nl pointer to netlink handler
  * @param nl_msg pointer to netlink message
  * @param hdr pointer to generic netlink header
  * @param interf nl80211 listener interface
  */
 void
 nl80211_send_get_interface(
-  struct os_system_netlink *nl, struct nlmsghdr *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf) {
+  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf) {
   int if_index = nl80211_get_if_baseindex(interf);
 
   hdr->cmd = NL80211_CMD_GET_INTERFACE;
 
   /* add interface index to the request */
-  os_system_linux_netlink_addreq(nl, nl_msg, NL80211_ATTR_IFINDEX, &if_index, sizeof(if_index));
+  os_system_linux_netlink_addreq(nl_msg, NL80211_ATTR_IFINDEX, &if_index, sizeof(if_index));
 }
 
 /**

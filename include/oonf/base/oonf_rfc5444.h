@@ -46,8 +46,8 @@
 #ifndef OONF_RFC5444_H_
 #define OONF_RFC5444_H_
 
-#include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/base/oonf_duplicate_set.h>
 #include <oonf/base/oonf_packet_socket.h>

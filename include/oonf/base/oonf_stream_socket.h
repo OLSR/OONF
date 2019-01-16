@@ -46,8 +46,8 @@
 #ifndef OONF_STREAM_SOCKET_H_
 #define OONF_STREAM_SOCKET_H_
 
-#include <oonf/libcommon/autobuf.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/autobuf.h>
 #include <oonf/libcommon/list.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/libcommon/netaddr_acl.h>

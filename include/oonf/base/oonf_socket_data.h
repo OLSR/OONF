@@ -43,13 +43,45 @@
  * @file
  */
 
-#ifndef NL80211_GET_MPP_H_
-#define NL80211_GET_MPP_H_
+#ifndef OONF_SOCKET_DATA_H_
+#define OONF_SOCKET_DATA_H_
 
-#include <oonf/generic/nl80211_listener/nl80211_listener.h>
+struct oonf_socket_entry;
 
-void nl80211_send_get_mpp(
-  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
-void nl80211_process_get_mpp_result(struct nl80211_if *interf, struct nlmsghdr *);
+#include <oonf/oonf.h>
+#include <oonf/libcommon/list.h>
+#include <oonf/base/os_fd_data.h>
 
-#endif /* NL80211_GET_MPP_H_ */
+/**
+ * registered socket handler
+ */
+struct oonf_socket_entry {
+  /*! name of socket handler */
+  const char *name;
+
+  /*! file descriptor of the socket */
+  struct os_fd fd;
+
+  /**
+   * Callback when read or write event happens to socket
+   * @param fd file descriptor of socket
+   */
+  void (*process)(struct oonf_socket_entry *entry);
+
+  /*! usage counter, will be increased every times the socket receives data */
+  uint32_t _stat_recv;
+
+  /*! usage counter, will be increased every times the socket sends data */
+  uint32_t _stat_send;
+
+  /*!
+   * usage counter, will be increased every times a socket processing takes
+   * more than a TIMER slice
+   */
+  uint32_t _stat_long;
+
+  /*! list of socket handlers */
+  struct list_entity _node;
+};
+
+#endif /* OONF_SOCKET_DATA_H_ */

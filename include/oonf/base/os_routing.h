@@ -46,6 +46,12 @@
 #ifndef OS_ROUTING_H_
 #define OS_ROUTING_H_
 
+struct os_route;
+struct os_route_listener;
+struct os_route_str;
+struct os_route_key;
+struct os_route_listener;
+
 #include <stdio.h>
 #include <sys/time.h>
 
@@ -58,12 +64,15 @@
 #include <oonf/base/os_interface.h>
 #include <oonf/base/os_system.h>
 
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_routing_linux_data.h>
+#else
+#error "Unknown operation system"
+#endif
+
 /*! subsystem identifier */
 #define OONF_OS_ROUTING_SUBSYSTEM "os_routing"
-
-struct os_route;
-struct os_route_listener;
-struct os_route_str;
 
 /* make sure default values for routing are there */
 #ifndef RTPROT_UNSPEC
@@ -115,6 +124,7 @@ enum os_route_type
   OS_ROUTE_UNICAST,
   OS_ROUTE_LOCAL,
   OS_ROUTE_BROADCAST,
+  OS_ROUTE_ANYCAST,
   OS_ROUTE_MULTICAST,
   OS_ROUTE_THROW,
   OS_ROUTE_UNREACHABLE,
@@ -188,13 +198,6 @@ struct os_route_parameter {
   unsigned int if_index;
 };
 
-/* include os-specific headers */
-#if defined(__linux__)
-#include <oonf/base/os_linux/os_routing_linux.h>
-#else
-#error "Unknown operation system"
-#endif
-
 /**
  * Handler for changing a route in the kernel
  * or querying the route status
@@ -262,5 +265,12 @@ static INLINE void os_routing_init_sourcespec_src_prefix(struct os_route_key *pr
 EXPORT int os_routing_avl_cmp_route_key(const void *, const void *);
 
 EXPORT const char *os_routing_cfg_get_rttype(size_t index, const void *unused);
+
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_routing_linux.h>
+#else
+#error "Unknown operation system"
+#endif
 
 #endif /* OS_ROUTING_H_ */

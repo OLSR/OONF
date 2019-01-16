@@ -43,13 +43,10 @@
  * @file
  */
 
-#ifndef NL80211_GET_MPP_H_
-#define NL80211_GET_MPP_H_
+#ifndef OS_TUNNEL_LINUX_DATA_H_
+#define OS_TUNNEL_LINUX_DATA_H_
 
-#include <oonf/generic/nl80211_listener/nl80211_listener.h>
+struct os_tunnel_internal {};
 
-void nl80211_send_get_mpp(
-  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
-void nl80211_process_get_mpp_result(struct nl80211_if *interf, struct nlmsghdr *);
+#endif /* OS_TUNNEL_LINUX_DATA_H_ */
 
-#endif /* NL80211_GET_MPP_H_ */

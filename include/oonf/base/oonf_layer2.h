@@ -46,8 +46,8 @@
 #ifndef OONF_LAYER2_H_
 #define OONF_LAYER2_H_
 
-#include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
 #include <oonf/libcore/oonf_subsystem.h>
 #include <oonf/base/os_interface.h>
 

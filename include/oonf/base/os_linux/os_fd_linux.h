@@ -52,46 +52,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <oonf/base/os_fd.h>
+#include <oonf/base/os_interface.h>
+#include <oonf/base/os_fd_data.h>
 #include <oonf/base/os_generic/os_fd_generic_configsocket.h>
 #include <oonf/base/os_generic/os_fd_generic_getrawsocket.h>
 #include <oonf/base/os_generic/os_fd_generic_getsocket.h>
 #include <oonf/base/os_generic/os_fd_generic_join_mcast.h>
 #include <oonf/base/os_generic/os_fd_generic_set_dscp.h>
 #include <oonf/base/os_generic/os_fd_generic_set_nonblocking.h>
-
-/*! name of the loopback interface */
-#define IF_LOOPBACK_NAME "lo"
-
-enum os_fd_flags
-{
-  OS_FD_ACTIVE = 1,
-};
-
-/*! linux specific socket definition */
-struct os_fd {
-  /*! file descriptor of socket */
-  int fd;
-
-  /*! flags for telling epoll which events we are interested in */
-  uint32_t wanted_events;
-
-  /*! flags which were triggered in last epoll */
-  uint32_t received_events;
-
-  /*! flags for socket */
-  enum os_fd_flags _flags;
-};
-
-/*! linux specific socket select definition */
-struct os_fd_select {
-  struct epoll_event _events[16];
-  int _event_count;
-
-  int _epoll_fd;
-
-  uint64_t deadline;
-};
 
 /** declare non-inline linux-specific functions */
 EXPORT int os_fd_linux_event_wait(struct os_fd_select *);

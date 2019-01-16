@@ -51,6 +51,7 @@ static const char *_route_types[] = {
   [OS_ROUTE_UNICAST] = "unicast",
   [OS_ROUTE_LOCAL] = "local",
   [OS_ROUTE_BROADCAST] = "broadcast",
+  [OS_ROUTE_ANYCAST] = "anycast",
   [OS_ROUTE_MULTICAST] = "multicast",
   [OS_ROUTE_THROW] = "throw",
   [OS_ROUTE_UNREACHABLE] = "unreachable",

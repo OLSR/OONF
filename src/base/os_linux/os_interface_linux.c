@@ -113,17 +113,9 @@ static void _init_mesh(struct os_interface *os_if);
 static void _refresh_mesh(struct os_interface *os_if, char *old_redirect, char *old_spoof);
 static void _cleanup_mesh(struct os_interface *os_if);
 
-static void _query_interface_links(void);
-static void _query_interface_addresses(void);
-
-static void _cb_rtnetlink_message(struct nlmsghdr *hdr);
-static void _cb_rtnetlink_error(uint32_t seq, int error);
-static void _cb_rtnetlink_done(uint32_t seq);
-static void _cb_rtnetlink_timeout(void);
-static void _cb_query_error(uint32_t seq, int error);
-static void _cb_query_done(uint32_t seq);
-static void _cb_query_timeout(void);
-static void _address_finished(struct os_interface_ip_change *addr, int error);
+static void _cb_rtnetlink_response(struct os_system_netlink_message *nl_msg, struct nlmsghdr *hdr);
+static void _cb_rtnetlink_multicast(struct os_system_netlink *nl, struct nlmsghdr *hdr);
+static void _cb_rtnetlink_feedback(struct os_system_netlink_message *nl_msg);
 
 static void _activate_if_routing(void);
 static void _deactivate_if_routing(void);
@@ -163,33 +155,31 @@ static struct oonf_subsystem _oonf_os_interface_subsystem = {
 };
 DECLARE_OONF_PLUGIN(_oonf_os_interface_subsystem);
 
-/* rtnetlink receiver for interface and address events */
-static struct os_system_netlink _rtnetlink_receiver = {
-  .name = "interface snooper",
-  .used_by = &_oonf_os_interface_subsystem,
-  .cb_message = _cb_rtnetlink_message,
-  .cb_error = _cb_rtnetlink_error,
-  .cb_done = _cb_rtnetlink_done,
-  .cb_timeout = _cb_rtnetlink_timeout,
-};
-
-static struct list_entity _rtnetlink_feedback;
-
 static const uint32_t _rtnetlink_mcast[] = { RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR };
 
-static struct os_system_netlink _rtnetlink_if_query = {
-  .name = "interface query",
+static struct os_system_netlink _rtnetlink_handler = {
+  .name = "interface",
+  .multicast = _rtnetlink_mcast,
+  .multicast_count = ARRAYSIZE(_rtnetlink_mcast),
+  
   .used_by = &_oonf_os_interface_subsystem,
-  .cb_message = _cb_rtnetlink_message,
-  .cb_error = _cb_query_error,
-  .cb_done = _cb_query_done,
-  .cb_timeout = _cb_query_timeout,
+  .cb_response = _cb_rtnetlink_response,
+  .cb_multicast = _cb_rtnetlink_multicast,
+  .cb_error = _cb_rtnetlink_feedback,
+  .cb_done = _cb_rtnetlink_feedback,
 };
 
-static bool _link_query_in_progress = false;
-static bool _address_query_in_progress = false;
-static bool _trigger_link_query = false;
-static bool _trigger_address_query = false;
+static uint8_t nl_buffer1[256], nl_buffer2[256];
+static struct os_system_netlink_message _nl_link_query = {
+  .message = (struct nlmsghdr*)nl_buffer1,
+  .max_length = ARRAYSIZE(nl_buffer1),
+  .originator = &_rtnetlink_handler,
+};
+static struct os_system_netlink_message _nl_address_query = {
+  .message = (struct nlmsghdr*)nl_buffer2,
+  .max_length = ARRAYSIZE(nl_buffer2),
+  .originator = &_rtnetlink_handler,
+};
 
 /* global procfile state before initialization */
 static char _original_rp_filter;
@@ -233,22 +223,14 @@ static const char _ANY_INTERFACE[] = OS_INTERFACE_ANY;
  */
 static int
 _init(void) {
-  if (os_system_linux_netlink_add(&_rtnetlink_receiver, NETLINK_ROUTE)) {
+  struct nlmsghdr *msg;
+  struct ifinfomsg *ifi;
+  struct ifaddrmsg *ifa;
+
+  if (os_system_linux_netlink_add(&_rtnetlink_handler, NETLINK_ROUTE)) {
     return -1;
   }
 
-  if (os_system_linux_netlink_add(&_rtnetlink_if_query, NETLINK_ROUTE)) {
-    os_system_linux_netlink_remove(&_rtnetlink_receiver);
-    return -1;
-  }
-
-  if (os_system_linux_netlink_add_mc(&_rtnetlink_receiver, _rtnetlink_mcast, ARRAYSIZE(_rtnetlink_mcast))) {
-    os_system_linux_netlink_remove(&_rtnetlink_receiver);
-    os_system_linux_netlink_remove(&_rtnetlink_if_query);
-    return -1;
-  }
-
-  list_init_head(&_rtnetlink_feedback);
   avl_init(&_interface_data_tree, avl_comp_strcasecmp, false);
   oonf_class_add(&_interface_data_class);
   oonf_class_add(&_interface_ip_class);
@@ -256,6 +238,34 @@ _init(void) {
   oonf_timer_add(&_interface_change_timer);
 
   _is_kernel_2_6_31_or_better = os_system_linux_is_minimal_kernel(2, 6, 31);
+
+  /* init link query */
+  msg = (void *)&nl_buffer1[0];
+
+  /* get link level data */
+  memset(nl_buffer1, 0, sizeof(nl_buffer1));
+  msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+  msg->nlmsg_type = RTM_GETLINK;
+
+  /* set length of netlink message with ifinfomsg payload */
+  msg->nlmsg_len = NLMSG_LENGTH(sizeof(*ifi));
+
+  ifi = NLMSG_DATA(msg);
+  ifi->ifi_family = AF_NETLINK;
+
+  /* init address query */
+  msg = (void *)&nl_buffer2[0];
+
+  /* get IP level data */
+  memset(nl_buffer2, 0, sizeof(nl_buffer2));
+  msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+  msg->nlmsg_type = RTM_GETADDR;
+
+  /* set length of netlink message with ifaddrmsg payload */
+  msg->nlmsg_len = NLMSG_LENGTH(sizeof(*ifa));
+
+  ifa = NLMSG_DATA(msg);
+  ifa->ifa_family = AF_UNSPEC;
 
   return 0;
 }
@@ -286,8 +296,7 @@ _cleanup(void) {
   oonf_class_remove(&_interface_data_class);
   oonf_class_remove(&_interface_class);
 
-  os_system_linux_netlink_remove(&_rtnetlink_if_query);
-  os_system_linux_netlink_remove(&_rtnetlink_receiver);
+  os_system_linux_netlink_remove(&_rtnetlink_handler);
 }
 
 /**
@@ -437,19 +446,18 @@ os_interface_linux_state_set(struct os_interface *os_if, bool up) {
  */
 int
 os_interface_linux_address_set(struct os_interface_ip_change *addr) {
-  uint8_t buffer[UIO_MAXIOV];
-  struct nlmsghdr *msg;
   struct ifaddrmsg *ifaddrreq;
-  int seq;
+  struct nlmsghdr *msg;
 #if defined(OONF_LOG_DEBUG_INFO)
   struct netaddr_str nbuf;
 #endif
 
-  memset(buffer, 0, sizeof(buffer));
-
   /* get pointers for netlink message */
-  msg = (void *)&buffer[0];
-
+  addr->_internal.msg.message = (void *)addr->_internal.nl_buffer;
+  addr->_internal.msg.max_length = sizeof(addr->_internal.nl_buffer);
+  msg = addr->_internal.msg.message;
+  
+  memset(msg, 0, addr->_internal.msg.max_length);
   if (addr->set) {
     msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE | NLM_F_ACK;
     msg->nlmsg_type = RTM_NEWADDR;
@@ -471,17 +479,12 @@ os_interface_linux_address_set(struct os_interface_ip_change *addr) {
   ifaddrreq->ifa_index = addr->if_index;
   ifaddrreq->ifa_scope = addr->scope;
 
-  if (os_system_linux_netlink_addnetaddr(&_rtnetlink_receiver, msg, IFA_LOCAL, &addr->address)) {
+  if (os_system_linux_netlink_addnetaddr(&addr->_internal.msg, IFA_LOCAL, &addr->address)) {
     return -1;
   }
 
   /* cannot fail */
-  seq = os_system_linux_netlink_send(&_rtnetlink_receiver, msg);
-
-  if (addr->cb_finished) {
-    list_add_tail(&_rtnetlink_feedback, &addr->_internal._node);
-    addr->_internal.nl_seq = seq;
-  }
+  os_system_linux_netlink_send(&_rtnetlink_handler, &addr->_internal.msg);
   return 0;
 }
 
@@ -566,15 +569,17 @@ _add_interface(const char *name) {
       data->flags.up = true;
     }
 
-    /* trigger new queries */
-    _trigger_link_query = true;
-    _trigger_address_query = true;
-
     data->if_linklocal_v4 = &NETADDR_UNSPEC;
     data->if_linklocal_v6 = &NETADDR_UNSPEC;
     data->if_v4 = &NETADDR_UNSPEC;
     data->if_v6 = &NETADDR_UNSPEC;
-    _query_interface_links();
+
+    if (os_system_linux_netlink_is_done(&_nl_address_query)) {
+      os_system_linux_netlink_send(&_rtnetlink_handler, &_nl_address_query);
+    }
+    if (os_system_linux_netlink_is_done(&_nl_link_query)) {
+      os_system_linux_netlink_send(&_rtnetlink_handler, &_nl_link_query);
+    }
   }
 
   return data;
@@ -827,80 +832,6 @@ _os_linux_writeToFile(const char *file, char *old, char value) {
   }
 
   return 0;
-}
-
-/**
- * Query a dump of all interface link data
- */
-static void
-_query_interface_links(void) {
-  uint8_t buffer[UIO_MAXIOV];
-  struct nlmsghdr *msg;
-  struct ifinfomsg *ifi;
-#if defined(OONF_LOG_DEBUG_INFO)
-#endif
-
-  if (_link_query_in_progress || _address_query_in_progress) {
-    return;
-  }
-
-  OONF_DEBUG(LOG_OS_INTERFACE, "Request all interface links");
-
-  _trigger_link_query = false;
-  _link_query_in_progress = true;
-
-  /* get pointers for netlink message */
-  msg = (void *)&buffer[0];
-
-  /* get link level data */
-  memset(buffer, 0, sizeof(buffer));
-  msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_ROOT;
-  msg->nlmsg_type = RTM_GETLINK;
-
-  /* set length of netlink message with ifinfomsg payload */
-  msg->nlmsg_len = NLMSG_LENGTH(sizeof(*ifi));
-
-  ifi = NLMSG_DATA(msg);
-  ifi->ifi_family = AF_NETLINK;
-
-  /* we don't care for the sequence number */
-  os_system_linux_netlink_send(&_rtnetlink_if_query, msg);
-}
-
-/**
- * Query a dump of all interface link data
- */
-static void
-_query_interface_addresses(void) {
-  uint8_t buffer[UIO_MAXIOV];
-  struct nlmsghdr *msg;
-  struct ifaddrmsg *ifa;
-
-  if (_link_query_in_progress || _address_query_in_progress) {
-    return;
-  }
-
-  _trigger_address_query = false;
-  _address_query_in_progress = true;
-
-  OONF_DEBUG(LOG_OS_INTERFACE, "Request all interface addresses");
-
-  /* get pointers for netlink message */
-  msg = (void *)&buffer[0];
-
-  /* get IP level data */
-  memset(buffer, 0, sizeof(buffer));
-  msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_ROOT;
-  msg->nlmsg_type = RTM_GETADDR;
-
-  /* set length of netlink message with ifaddrmsg payload */
-  msg->nlmsg_len = NLMSG_LENGTH(sizeof(*ifa));
-
-  ifa = NLMSG_DATA(msg);
-  ifa->ifa_family = AF_UNSPEC;
-
-  /* we don't care for the sequence number */
-  os_system_linux_netlink_send(&_rtnetlink_if_query, msg);
 }
 
 /**
@@ -1211,12 +1142,17 @@ _address_parse_nlmsg(const char *ifname, struct nlmsghdr *msg) {
   }
 }
 
+static void 
+_cb_rtnetlink_response(struct os_system_netlink_message *nl_msg, struct nlmsghdr *hdr) {
+  _cb_rtnetlink_multicast(nl_msg->originator, hdr);
+}
+
 /**
  * Handle incoming rtnetlink multicast messages for interface listeners
  * @param hdr pointer to netlink message
  */
 static void
-_cb_rtnetlink_message(struct nlmsghdr *hdr) {
+_cb_rtnetlink_multicast(struct os_system_netlink *nl __attribute__((unused)), struct nlmsghdr *hdr) {
   struct ifinfomsg *ifi;
   struct ifaddrmsg *ifa;
   char ifname[IF_NAMESIZE];
@@ -1241,7 +1177,7 @@ _cb_rtnetlink_message(struct nlmsghdr *hdr) {
     _address_parse_nlmsg(ifname, hdr);
   }
   else {
-    OONF_DEBUG(LOG_OS_INTERFACE, "Message type: %u", hdr->nlmsg_type);
+    OONF_WARN(LOG_OS_INTERFACE, "Message type: %u", hdr->nlmsg_type);
   }
 }
 
@@ -1251,140 +1187,25 @@ _cb_rtnetlink_message(struct nlmsghdr *hdr) {
  * @param error error code
  */
 static void
-_cb_rtnetlink_error(uint32_t seq, int error) {
+_cb_rtnetlink_feedback(struct os_system_netlink_message *nl_msg) {
   struct os_interface_ip_change *addr;
 
-  OONF_INFO(LOG_OS_INTERFACE, "Netlink socket provided feedback: %d %d", seq, error);
-
-  /* transform into errno number */
-  list_for_each_element(&_rtnetlink_feedback, addr, _internal._node) {
-    if (seq == addr->_internal.nl_seq) {
-      _address_finished(addr, error);
-      break;
-    }
+  OONF_INFO(LOG_OS_INTERFACE, "Netlink socket provided feedback: %d %d", 
+            nl_msg->message->nlmsg_seq, nl_msg->result);
+  if (nl_msg->dump) {
+    /* this was one of the queries, no need to react */
+    return;
   }
-}
 
-/**
- * Handle ack timeout from netlink socket
- */
-static void
-_cb_rtnetlink_timeout(void) {
-  struct os_interface_ip_change *addr;
-
-  OONF_INFO(LOG_OS_INTERFACE, "Netlink socket timed out");
-
-  list_for_each_element(&_rtnetlink_feedback, addr, _internal._node) {
-    _address_finished(addr, -1);
-  }
-}
-
-/**
- * Handle done from multipart netlink messages
- * @param seq sequence number of netlink message
- */
-static void
-_cb_rtnetlink_done(uint32_t seq) {
-  struct os_interface_ip_change *addr;
-
-  OONF_INFO(LOG_OS_INTERFACE, "Netlink operation finished: %u", seq);
-
-  list_for_each_element(&_rtnetlink_feedback, addr, _internal._node) {
-    if (seq == addr->_internal.nl_seq) {
-      _address_finished(addr, 0);
-      break;
-    }
-  }
-}
-
-/**
- * Stop processing of an ip address command and set error code
- * for callback
- * @param addr pointer to os_system_address
- * @param error error code, 0 if no error
- */
-static void
-_address_finished(struct os_interface_ip_change *addr, int error) {
+  addr = container_of(nl_msg, struct os_interface_ip_change, _internal.msg);
   if (list_is_node_added(&addr->_internal._node)) {
     /* remove first to prevent any kind of recursive cleanup */
     list_remove(&addr->_internal._node);
 
     if (addr->cb_finished) {
-      addr->cb_finished(addr, error);
+      addr->cb_finished(addr, nl_msg->result);
     }
   }
-}
-
-/**
- * Handle switching between netlink query for links and addresses
- */
-static void
-_process_end_of_query(void) {
-  if (_link_query_in_progress) {
-    _link_query_in_progress = false;
-
-    if (_trigger_address_query) {
-      _query_interface_addresses();
-    }
-    else if (_trigger_link_query) {
-      _query_interface_links();
-    }
-  }
-  else {
-    _address_query_in_progress = false;
-
-    if (_trigger_link_query) {
-      _query_interface_links();
-    }
-    else if (_trigger_address_query) {
-      _query_interface_addresses();
-    }
-  }
-}
-
-/**
- * Handle a netlink query that did not work out
- */
-static void
-_process_bad_end_of_query(void) {
-  /* reactivate query that has failed */
-  if (_link_query_in_progress) {
-    _trigger_link_query = true;
-  }
-  if (_address_query_in_progress) {
-    _trigger_address_query = true;
-  }
-  _process_end_of_query();
-}
-
-/**
- * Handle an incoming netlink query error
- * @param seq sequence number of netlink message
- * @param error error code
- */
-static void
-_cb_query_error(uint32_t seq __attribute((unused)), int error __attribute((unused))) {
-  OONF_DEBUG(LOG_OS_INTERFACE, "Received error %d for query %u", error, seq);
-  _process_bad_end_of_query();
-}
-
-/**
- * Handle a successful netlink query
- * @param seq sequence number of netlink message
- */
-static void
-_cb_query_done(uint32_t seq __attribute((unused))) {
-  OONF_DEBUG(LOG_OS_INTERFACE, "Query %u done", seq);
-  _process_end_of_query();
-}
-
-/**
- * Handle a timeout of a netlink query
- */
-static void
-_cb_query_timeout(void) {
-  OONF_DEBUG(LOG_OS_INTERFACE, "Query timeout");
-  _process_bad_end_of_query();
 }
 
 /**

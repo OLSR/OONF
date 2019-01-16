@@ -46,8 +46,8 @@
 #ifndef _OONF_CLASS_H
 #define _OONF_CLASS_H
 
-#include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
 #include <oonf/libcommon/list.h>
 
 /*! subsystem identifier */

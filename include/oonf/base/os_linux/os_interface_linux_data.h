@@ -43,13 +43,75 @@
  * @file
  */
 
-#ifndef NL80211_GET_MPP_H_
-#define NL80211_GET_MPP_H_
+#ifndef OS_INTERFACE_LINUX_DATA_H_
+#define OS_INTERFACE_LINUX_DATA_H_
 
-#include <oonf/generic/nl80211_listener/nl80211_listener.h>
+struct os_interface_address_change_internal;
+struct os_interface_internal;
 
-void nl80211_send_get_mpp(
-  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
-void nl80211_process_get_mpp_result(struct nl80211_if *interf, struct nlmsghdr *);
+#include <oonf/oonf.h>
+#include <oonf/base/os_linux/os_system_linux_data.h>
 
-#endif /* NL80211_GET_MPP_H_ */
+enum
+{
+  /*! interval until an interface change trigger will be activated again */
+  OS_INTERFACE_CHANGE_TRIGGER_INTERVAL = 200,
+};
+
+#define OS_INTERFACE_ANY "any"
+
+/**
+ * define scope of address on interface
+ */
+enum os_addr_scope
+{
+  /* linklocal scope */
+  OS_ADDR_SCOPE_LINK = RT_SCOPE_LINK,
+  /*! global scope */
+  OS_ADDR_SCOPE_GLOBAL = RT_SCOPE_UNIVERSE,
+};
+
+/**
+ * linux specifc data for changing an interface address
+ */
+struct os_interface_address_change_internal {
+  /*! hook into list of IP address change handlers */
+  struct list_entity _node;
+
+  struct os_system_netlink_message msg;
+  
+  /* (well aligned) buffer for netlink message */
+  uint64_t nl_buffer[256/sizeof(uint64_t)];
+};
+
+struct os_interface_internal {
+  /**
+   * true if this interface should not be initialized as a mesh interface
+   * even if used as one. This means the user have to do all the
+   * os configuration itself.
+   */
+  bool ignore_mesh;
+
+  /**
+   * usage counter to keep track of the number of users on
+   * this interface who want to send mesh traffic
+   */
+  uint32_t mesh_counter;
+
+  /**
+   * original value of IP spoof filter before changed to mesh state
+   */
+  char _original_ip_spoof;
+
+  /**
+   * original value of ip redirect before changed to mesh state
+   */
+  char _original_icmp_redirect;
+
+  /**
+   * true if the interface has been configured, keep a copy around
+   */
+  bool configured;
+};
+
+#endif /* OS_INTERFACE_LINUX_DATA_H_ */

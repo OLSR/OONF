@@ -46,6 +46,8 @@
 #ifndef OS_TUNNEL_H_
 #define OS_TUNNEL_H_
 
+struct os_tunnel;
+
 #include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
 #include <oonf/libcommon/netaddr.h>
@@ -53,11 +55,9 @@
 /*! subsystem identifier */
 #define OONF_OS_TUNNEL_SUBSYSTEM "os_tunnel"
 
-struct os_tunnel;
-
 /* include os-specific headers */
 #if defined(__linux__)
-#include <oonf/base/os_linux/os_tunnel_linux.h>
+#include <oonf/base/os_linux/os_tunnel_linux_data.h>
 #else
 #error "Unknown operation system"
 #endif
@@ -111,5 +111,12 @@ struct os_tunnel {
 
 static INLINE int os_tunnel_add(struct os_tunnel *);
 static INLINE int os_tunnel_remove(struct os_tunnel *);
+
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_tunnel_linux.h>
+#else
+#error "Unknown operation system"
+#endif
 
 #endif /* OS_TUNNEL_H_ */

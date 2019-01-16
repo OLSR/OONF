@@ -43,65 +43,8 @@
  * @file
  */
 
-#ifndef OS_INTERFACE_LINUX_INTERNAL_H_
-#define OS_INTERFACE_LINUX_INTERNAL_H_
+#ifndef OS_CLOCK_LINUX_DATA_H_
+#define OS_CLOCK_LINUX_DATA_H_
 
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
 
-#include <oonf/oonf.h>
-#include <oonf/base/os_interface.h>
-
-/**
- * define scope of address on interface
- */
-enum os_addr_scope
-{
-  /* linklocal scope */
-  OS_ADDR_SCOPE_LINK = RT_SCOPE_LINK,
-  /*! global scope */
-  OS_ADDR_SCOPE_GLOBAL = RT_SCOPE_UNIVERSE,
-};
-
-/**
- * linux specifc data for changing an interface address
- */
-struct os_interface_address_change_internal {
-  /*! hook into list of IP address change handlers */
-  struct list_entity _node;
-
-  /*! netlink sequence number of command sent to the kernel */
-  uint32_t nl_seq;
-};
-
-struct os_interface_internal {
-  /**
-   * true if this interface should not be initialized as a mesh interface
-   * even if used as one. This means the user have to do all the
-   * os configuration itself.
-   */
-  bool ignore_mesh;
-
-  /**
-   * usage counter to keep track of the number of users on
-   * this interface who want to send mesh traffic
-   */
-  uint32_t mesh_counter;
-
-  /**
-   * original value of IP spoof filter before changed to mesh state
-   */
-  char _original_ip_spoof;
-
-  /**
-   * original value of ip redirect before changed to mesh state
-   */
-  char _original_icmp_redirect;
-
-  /**
-   * true if the interface has been configured, keep a copy around
-   */
-  bool configured;
-};
-
-#endif /* OS_INTERFACE_LINUX_INTERNAL_H_ */
+#endif /* OS_CLOCK_LINUX_DATA_H_ */

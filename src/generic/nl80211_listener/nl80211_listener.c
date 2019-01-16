@@ -105,13 +105,12 @@ struct _nl80211_query {
 
   /**
    * Callback to send query
-   * @param nl netlink handler
-   * @param nl_msg netlink message header
+   * @param nl_msg netlink message
    * @param hdr generic message header
    * @param interf netlink interface
    */
   void (*send)(
-    struct os_system_netlink *nl, struct nlmsghdr *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
+    struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
 
   /**
    * Callback to process incoming netlink data
@@ -170,10 +169,8 @@ static void _cb_if_config_changed(void);
 static void _cb_transmission_event(struct oonf_timer_instance *);
 static void _trigger_next_netlink_query(void);
 
-static void _cb_nl_message(struct nlmsghdr *hdr);
-static void _cb_nl_error(uint32_t seq, int error);
-static void _cb_nl_timeout(void);
-static void _cb_nl_done(uint32_t seq);
+static void _cb_nl_response(struct os_system_netlink_message* nl_msg, struct nlmsghdr* hdr);
+static void _cb_nl_feedback(struct os_system_netlink_message *nl);
 
 /* configuration */
 static struct cfg_schema_section _if_section = {
@@ -233,15 +230,19 @@ enum oonf_log_source LOG_NL80211;
 static struct os_system_netlink _netlink_handler = {
   .name = "nl80211 listener",
   .used_by = &_nl80211_listener_subsystem,
-  .cb_message = _cb_nl_message,
-  .cb_error = _cb_nl_error,
-  .cb_done = _cb_nl_done,
-  .cb_timeout = _cb_nl_timeout,
+  .cb_response = _cb_nl_response,
+  .cb_error = _cb_nl_feedback,
+  .cb_done = _cb_nl_feedback,
 };
 
 /* buffer for outgoing netlink message */
-static uint32_t _nl_msgbuffer[UIO_MAXIOV / 4];
+static uint32_t _nl_msgbuffer[UIO_MAXIOV / sizeof(uint32_t)];
 static struct nlmsghdr *_nl_msg = (void *)_nl_msgbuffer;
+static struct os_system_netlink_message os_nl_msg = {
+  .message = (void *)_nl_msgbuffer,
+  .max_length = sizeof(_nl_msgbuffer),
+  .originator = &_netlink_handler,
+};
 
 /* netlink nl80211 identification */
 static uint32_t _nl80211_id = 0;
@@ -588,10 +589,10 @@ _send_netlink_message(struct nl80211_if *interf, enum _if_query query) {
     genl_send_get_family(_nl_msg, hdr);
   }
   else if (_if_query_ops[query].send) {
-    _if_query_ops[query].send(&_netlink_handler, _nl_msg, hdr, interf);
+    _if_query_ops[query].send(&os_nl_msg, hdr, interf);
   }
 
-  os_system_linux_netlink_send(&_netlink_handler, _nl_msg);
+  os_system_linux_netlink_send(&_netlink_handler, &os_nl_msg);
 }
 
 /**
@@ -676,7 +677,7 @@ _trigger_next_netlink_query(void) {
  * @param hdr pointer to netlink message
  */
 static void
-_cb_nl_message(struct nlmsghdr *hdr) {
+_cb_nl_response(struct os_system_netlink_message *nl_msg __attribute__((unused)), struct nlmsghdr *hdr) {
   struct genlmsghdr *gen_hdr;
 
   gen_hdr = NLMSG_DATA(hdr);
@@ -706,34 +707,9 @@ _cb_nl_message(struct nlmsghdr *hdr) {
  * @param error error code
  */
 static void
-_cb_nl_error(uint32_t seq __attribute((unused)), int error __attribute((unused))) {
-  OONF_INFO(LOG_NL80211, "seq %u: Received error %d", seq, error);
-  if (_nl80211_id && _nl80211_multicast_group) {
-    _trigger_next_netlink_query();
-  }
-}
-
-/**
- * Callback triggered when one or more netlink messages time out
- */
-static void
-_cb_nl_timeout(void) {
-  OONF_INFO(LOG_NL80211, "Received timeout");
-  if (_nl80211_id && _nl80211_multicast_group) {
-    if (_if_query_ops[_current_query_number].finalize) {
-      _if_query_ops[_current_query_number].finalize(_current_query_if);
-    }
-    _trigger_next_netlink_query();
-  }
-}
-
-/**
- * Callback triggered when a netlink message is done
- * @param seq sequence number
- */
-static void
-_cb_nl_done(uint32_t seq __attribute((unused))) {
-  OONF_INFO(LOG_NL80211, "%u: Received done", seq);
+_cb_nl_feedback(struct os_system_netlink_message *nlmsg __attribute__((unused))) {
+  OONF_INFO(LOG_NL80211, "seq %u: Result %d",
+            nlmsg->message->nlmsg_seq, nlmsg->result);
   if (_nl80211_id && _nl80211_multicast_group) {
     if (_if_query_ops[_current_query_number].finalize) {
       _if_query_ops[_current_query_number].finalize(_current_query_if);

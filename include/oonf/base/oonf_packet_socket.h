@@ -46,8 +46,8 @@
 #ifndef OONF_PACKET_SOCKET_H_
 #define OONF_PACKET_SOCKET_H_
 
-#include <oonf/libcommon/autobuf.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/autobuf.h>
 #include <oonf/libcommon/list.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/libcommon/netaddr_acl.h>

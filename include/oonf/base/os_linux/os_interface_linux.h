@@ -52,14 +52,7 @@
 #include <oonf/oonf.h>
 #include <oonf/base/os_generic/os_interface_generic.h>
 #include <oonf/base/os_interface.h>
-
-enum
-{
-  /*! interval until an interface change trigger will be activated again */
-  OS_INTERFACE_CHANGE_TRIGGER_INTERVAL = 200,
-};
-
-#define OS_INTERFACE_ANY "any"
+#include <oonf/base/os_linux/os_interface_linux_data.h>
 
 EXPORT struct os_interface *os_interface_linux_add(struct os_interface_listener *);
 EXPORT void os_interface_linux_remove(struct os_interface_listener *);

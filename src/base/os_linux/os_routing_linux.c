@@ -51,9 +51,9 @@
 #include <linux/rtnetlink.h>
 #include <sys/uio.h>
 
+#include <oonf/oonf.h>
 #include <oonf/libcommon/avl.h>
 #include <oonf/libcommon/avl_comp.h>
-#include <oonf/oonf.h>
 #include <oonf/libcore/oonf_subsystem.h>
 #include <oonf/base/os_system.h>
 
@@ -78,13 +78,13 @@ struct route_type_translation {
 static int _init(void);
 static void _cleanup(void);
 
-static int _routing_set(struct nlmsghdr *msg, struct os_route *route, unsigned char rt_scope);
+static int _routing_set(struct os_system_netlink_message *msg, struct os_route *route, unsigned char rt_scope);
 
 static void _routing_finished(struct os_route *route, int error);
-static void _cb_rtnetlink_message(struct nlmsghdr *);
-static void _cb_rtnetlink_error(uint32_t seq, int err);
-static void _cb_rtnetlink_done(uint32_t seq);
-static void _cb_rtnetlink_timeout(void);
+static void _cb_rtnetlink_response(struct os_system_netlink_message *msg, struct nlmsghdr *header);
+static void _cb_rtnetlink_multicast(struct os_system_netlink *nl, struct nlmsghdr *header);
+static void _cb_rtnetlink_error(struct os_system_netlink_message *nl_msg);
+static void _cb_rtnetlink_done(struct os_system_netlink_message *nl_msg);
 
 /* subsystem definition */
 static const char *_dependencies[] = {
@@ -102,7 +102,9 @@ DECLARE_OONF_PLUGIN(_oonf_os_routing_subsystem);
 
 /* translation table between route types */
 static struct route_type_translation _type_translation[] = { { OS_ROUTE_UNICAST, RTN_UNICAST },
-  { OS_ROUTE_LOCAL, RTN_LOCAL }, { OS_ROUTE_BROADCAST, RTN_BROADCAST }, { OS_ROUTE_MULTICAST, RTN_MULTICAST },
+  { OS_ROUTE_LOCAL, RTN_LOCAL }, { OS_ROUTE_BROADCAST, RTN_BROADCAST }, 
+  { OS_ROUTE_ANYCAST, RTN_ANYCAST },
+  { OS_ROUTE_MULTICAST, RTN_MULTICAST },
   { OS_ROUTE_THROW, RTN_THROW }, { OS_ROUTE_UNREACHABLE, RTN_UNREACHABLE }, { OS_ROUTE_PROHIBIT, RTN_PROHIBIT },
   { OS_ROUTE_BLACKHOLE, RTN_BLACKHOLE }, { OS_ROUTE_NAT, RTN_NAT } };
 
@@ -110,15 +112,18 @@ static struct route_type_translation _type_translation[] = { { OS_ROUTE_UNICAST,
 static const uint32_t _rtnetlink_mcast[] = { RTNLGRP_IPV4_ROUTE, RTNLGRP_IPV6_ROUTE };
 
 static struct os_system_netlink _rtnetlink_socket = {
-  .name = "routing",
+  .name = "routing send",
   .used_by = &_oonf_os_routing_subsystem,
-  .cb_message = _cb_rtnetlink_message,
+  
+  .multicast = &_rtnetlink_mcast[0],
+  .multicast_count = ARRAYSIZE(_rtnetlink_mcast),
+
+  .cb_response = _cb_rtnetlink_response,
+  .cb_multicast = _cb_rtnetlink_multicast,
   .cb_error = _cb_rtnetlink_error,
   .cb_done = _cb_rtnetlink_done,
-  .cb_timeout = _cb_rtnetlink_timeout,
 };
 
-static struct avl_tree _rtnetlink_feedback;
 static struct list_entity _rtnetlink_listener;
 
 /* default wildcard route */
@@ -148,11 +153,7 @@ _init(void) {
   if (os_system_linux_netlink_add(&_rtnetlink_socket, NETLINK_ROUTE)) {
     return -1;
   }
-  if (os_system_linux_netlink_add_mc(&_rtnetlink_socket, _rtnetlink_mcast, ARRAYSIZE(_rtnetlink_mcast))) {
-    os_system_linux_netlink_remove(&_rtnetlink_socket);
-    return -1;
-  }
-  avl_init(&_rtnetlink_feedback, avl_comp_uint32, false);
+ 
   list_init_head(&_rtnetlink_listener);
 
   _is_kernel_3_11_0_or_better = os_system_linux_is_minimal_kernel(3, 11, 0);
@@ -164,11 +165,7 @@ _init(void) {
  */
 static void
 _cleanup(void) {
-  struct os_route *rt, *rt_it;
-
-  avl_for_each_element_safe(&_rtnetlink_feedback, rt, _internal._node, rt_it) {
-    _routing_finished(rt, 1);
-  }
+  /* TODO: remove out netlink handler */
 
   os_system_linux_netlink_remove(&_rtnetlink_socket);
 }
@@ -201,20 +198,23 @@ os_routing_linux_supports_source_specific(int af_family) {
  */
 int
 os_routing_linux_set(struct os_route *route, bool set, bool del_similar) {
-  uint8_t buffer[UIO_MAXIOV];
-  struct nlmsghdr *msg;
-  unsigned char scope;
   struct os_route os_rt;
-  int seq;
+  unsigned char scope;
+  struct nlmsghdr *msg;
+#ifdef OONF_LOG_DEBUG_INFO
   struct os_route_str rbuf;
+#endif
 
-  memset(buffer, 0, sizeof(buffer));
+  /* clear netlink buffer */
+  msg = (struct nlmsghdr *)&route->_internal.nl_buffer[0];
+  memset(msg, 0, sizeof(route->_internal.nl_buffer));
+
+  /* get pointers for netlink message */
+  route->_internal.msg.message = msg;
+  route->_internal.msg.max_length = sizeof(route->_internal.nl_buffer);
 
   /* copy route settings */
   memcpy(&os_rt, route, sizeof(os_rt));
-
-  /* get pointers for netlink message */
-  msg = (void *)&buffer[0];
 
   msg->nlmsg_flags = NLM_F_REQUEST;
 
@@ -251,22 +251,13 @@ os_routing_linux_set(struct os_route *route, bool set, bool del_similar) {
 
   OONF_DEBUG(LOG_OS_ROUTING, "%sset route: %s", set ? "" : "re", os_routing_to_string(&rbuf, &os_rt.p));
 
-  if (_routing_set(msg, &os_rt, scope)) {
+  if (_routing_set(&route->_internal.msg, &os_rt, scope)) {
+    OONF_WARN(LOG_OS_ROUTING, "%sset route failed", set ? "": "re");
     return -1;
   }
 
   /* cannot fail */
-  seq = os_system_linux_netlink_send(&_rtnetlink_socket, msg);
-
-  if (route->cb_finished) {
-    route->_internal.nl_seq = seq;
-    route->_internal._node.key = &route->_internal.nl_seq;
-
-    OONF_ASSERT(!avl_is_node_added(&route->_internal._node),
-                LOG_OS_ROUTING, "route %s is already in feedback list!",
-                os_routing_to_string(&rbuf, &os_rt.p));
-    avl_insert(&_rtnetlink_feedback, &route->_internal._node);
-  }
+  os_system_linux_netlink_send(&_rtnetlink_socket, &route->_internal.msg);
   return 0;
 }
 
@@ -277,16 +268,23 @@ os_routing_linux_set(struct os_route *route, bool set, bool del_similar) {
  */
 int
 os_routing_linux_query(struct os_route *route) {
-  uint8_t buffer[UIO_MAXIOV];
   struct nlmsghdr *msg;
   struct rtgenmsg *rt_gen;
-  int seq;
-
+#ifdef OONF_LOG_DEBUG_INFO
+  struct os_route_str rbuf;
+#endif
   OONF_ASSERT(route->cb_finished != NULL && route->cb_get != NULL, LOG_OS_ROUTING, "illegal route query");
-  memset(buffer, 0, sizeof(buffer));
+  OONF_DEBUG(LOG_OS_ROUTING, "routing query: %s", os_routing_to_string(&rbuf, &route->p));
+
+  /* clear netlink buffer */
+  msg = (struct nlmsghdr *)&route->_internal.nl_buffer[0];
+  memset(msg, 0, sizeof(route->_internal.nl_buffer));
 
   /* get pointers for netlink message */
-  msg = (void *)&buffer[0];
+  route->_internal.msg.message = msg;
+  route->_internal.msg.max_length = sizeof(route->_internal.nl_buffer);
+
+  /* get pointers for netlink message */
   rt_gen = NLMSG_DATA(msg);
 
   msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
@@ -297,14 +295,7 @@ os_routing_linux_query(struct os_route *route) {
   msg->nlmsg_type = RTM_GETROUTE;
   rt_gen->rtgen_family = route->p.family;
 
-  seq = os_system_linux_netlink_send(&_rtnetlink_socket, msg);
-  if (seq < 0) {
-    return -1;
-  }
-
-  route->_internal.nl_seq = seq;
-  route->_internal._node.key = &route->_internal.nl_seq;
-  avl_insert(&_rtnetlink_feedback, &route->_internal._node);
+  os_system_linux_netlink_send(&_rtnetlink_socket, &route->_internal.msg);
   return 0;
 }
 
@@ -367,8 +358,8 @@ os_routing_linux_init_wildcard_route(struct os_route *route) {
 static void
 _routing_finished(struct os_route *route, int error) {
   /* remove first to prevent any kind of recursive cleanup */
-  avl_remove(&_rtnetlink_feedback, &route->_internal._node);
-
+  os_system_linux_netlink_interrupt(&route->_internal.msg);
+  
   if (route->cb_finished) {
     route->cb_finished(route, error);
   }
@@ -382,10 +373,13 @@ _routing_finished(struct os_route *route, int error) {
  * @return -1 if an error happened, 0 otherwise
  */
 static int
-_routing_set(struct nlmsghdr *msg, struct os_route *route, unsigned char rt_scope) {
+_routing_set(struct os_system_netlink_message *nl_msg, struct os_route *route, unsigned char rt_scope) {
   struct rtmsg *rt_msg;
+  struct nlmsghdr *msg;
   size_t i;
 
+  msg = nl_msg->message;
+  
   /* calculate address af_type */
   if (netaddr_get_address_family(&route->p.key.dst) != AF_UNSPEC) {
     route->p.family = netaddr_get_address_family(&route->p.key.dst);
@@ -429,7 +423,7 @@ _routing_set(struct nlmsghdr *msg, struct os_route *route, unsigned char rt_scop
   /* add attributes */
   if (netaddr_get_address_family(&route->p.src_ip) != AF_UNSPEC) {
     /* add src-ip */
-    if (os_system_linux_netlink_addnetaddr(&_rtnetlink_socket, msg, RTA_PREFSRC, &route->p.src_ip)) {
+    if (os_system_linux_netlink_addnetaddr(nl_msg, RTA_PREFSRC, &route->p.src_ip)) {
       return -1;
     }
   }
@@ -438,7 +432,7 @@ _routing_set(struct nlmsghdr *msg, struct os_route *route, unsigned char rt_scop
     rt_msg->rtm_flags |= RTNH_F_ONLINK;
 
     /* add gateway */
-    if (os_system_linux_netlink_addnetaddr(&_rtnetlink_socket, msg, RTA_GATEWAY, &route->p.gw)) {
+    if (os_system_linux_netlink_addnetaddr(nl_msg, RTA_GATEWAY, &route->p.gw)) {
       return -1;
     }
   }
@@ -447,7 +441,7 @@ _routing_set(struct nlmsghdr *msg, struct os_route *route, unsigned char rt_scop
     rt_msg->rtm_dst_len = netaddr_get_prefix_length(&route->p.key.dst);
 
     /* add destination */
-    if (os_system_linux_netlink_addnetaddr(&_rtnetlink_socket, msg, RTA_DST, &route->p.key.dst)) {
+    if (os_system_linux_netlink_addnetaddr(nl_msg, RTA_DST, &route->p.key.dst)) {
       return -1;
     }
   }
@@ -456,23 +450,21 @@ _routing_set(struct nlmsghdr *msg, struct os_route *route, unsigned char rt_scop
     rt_msg->rtm_src_len = netaddr_get_prefix_length(&route->p.key.src);
 
     /* add source-specific routing prefix */
-    if (os_system_linux_netlink_addnetaddr(&_rtnetlink_socket, msg, RTA_SRC, &route->p.key.src)) {
+    if (os_system_linux_netlink_addnetaddr(nl_msg, RTA_SRC, &route->p.key.src)) {
       return -1;
     }
   }
 
   if (route->p.metric != -1) {
     /* add metric */
-    if (os_system_linux_netlink_addreq(
-          &_rtnetlink_socket, msg, RTA_PRIORITY, &route->p.metric, sizeof(route->p.metric))) {
+    if (os_system_linux_netlink_addreq(nl_msg, RTA_PRIORITY, &route->p.metric, sizeof(route->p.metric))) {
       return -1;
     }
   }
 
   if (route->p.if_index) {
     /* add interface*/
-    if (os_system_linux_netlink_addreq(
-          &_rtnetlink_socket, msg, RTA_OIF, &route->p.if_index, sizeof(route->p.if_index))) {
+    if (os_system_linux_netlink_addreq(nl_msg, RTA_OIF, &route->p.if_index, sizeof(route->p.if_index))) {
       return -1;
     }
   }
@@ -523,7 +515,7 @@ _routing_parse_nlmsg(struct os_route *route, struct nlmsghdr *msg) {
     }
   }
   if (route->p.type == OS_ROUTE_UNDEFINED) {
-    OONF_DEBUG(LOG_OS_ROUTING, "Got route type: %u", rt_msg->rtm_type);
+    OONF_DEBUG(LOG_OS_ROUTING, "Got route type %u which has no OONF match", rt_msg->rtm_type);
     return 2;
   }
 
@@ -609,51 +601,74 @@ _match_routes(struct os_route *filter, struct os_route *route) {
  * @param msg netlink message including header
  */
 static void
-_cb_rtnetlink_message(struct nlmsghdr *msg) {
+_cb_rtnetlink_multicast(struct os_system_netlink *nl __attribute__((unused)), struct nlmsghdr *msg) {
   struct os_route_listener *listener;
-  struct os_route *filter;
-  struct os_route rt;
+  struct os_route netlink_payload;
   int result;
 
 #ifdef OONF_LOG_DEBUG_INFO
   struct os_route_str rbuf;
 #endif
-  OONF_DEBUG(LOG_OS_ROUTING, "Got message: %d %d 0x%04x", msg->nlmsg_seq, msg->nlmsg_type, msg->nlmsg_flags);
 
   if (msg->nlmsg_type != RTM_NEWROUTE && msg->nlmsg_type != RTM_DELROUTE) {
+    OONF_DEBUG(LOG_OS_ROUTING, "'Received (unnecessary) netlink message type %u", msg->nlmsg_type);
     return;
   }
 
-  if ((result = _routing_parse_nlmsg(&rt, msg))) {
-    if (result < 0) {
-      OONF_WARN(LOG_OS_ROUTING, "Error while processing route reply (result %d)", result);
-    }
+  result = _routing_parse_nlmsg(&netlink_payload, msg);
+  if (result < 0) {
+    OONF_WARN(LOG_OS_ROUTING, "Error while processing route reply (result %d)", result);
+    return;
+  }
+  if (result > 0) {
+    OONF_DEBUG(LOG_OS_ROUTING, "Ignore incoming routing message");
     return;
   }
 
-  OONF_DEBUG(LOG_OS_ROUTING, "Content: %s", os_routing_to_string(&rbuf, &rt.p));
+  OONF_DEBUG(LOG_OS_ROUTING, "%s %s", msg->nlmsg_type == RTM_NEWROUTE ? "route added" : "route removed",
+             os_routing_to_string(&rbuf, &netlink_payload.p));
 
-  /*
-   * sometimes netlink messages from the kernel have a (random?) sequence number, so
-   * we deliver everything with seq==0 and with an unregistered sequence number
-   * to the attached listeners now
-   */
-  filter = NULL;
-  if (msg->nlmsg_seq != 0) {
-    /* check for feedback for ongoing route commands */
-    filter = avl_find_element(&_rtnetlink_feedback, &msg->nlmsg_seq, filter, _internal._node);
+  /* send route events to listeners */
+  list_for_each_element(&_rtnetlink_listener, listener, _internal._node) {
+    listener->cb_get(&netlink_payload, msg->nlmsg_type == RTM_NEWROUTE);
+  }
+}
+
+/**
+ * Handle incoming rtnetlink messages
+ * @param msg netlink message including header
+ */
+static void
+_cb_rtnetlink_response(struct os_system_netlink_message *msg, struct nlmsghdr *header) {
+  struct os_route *filter;
+  struct os_route netlink_payload;
+  int result;
+
+#ifdef OONF_LOG_DEBUG_INFO
+  struct os_route_str rbuf;
+#endif
+
+  if (header->nlmsg_type != RTM_NEWROUTE && header->nlmsg_type != RTM_DELROUTE) {
+    OONF_DEBUG(LOG_OS_ROUTING, "Received (unnecessary) netlink message type %u", header->nlmsg_type);
+    return;
   }
 
-  if (filter) {
-    if (filter->cb_get != NULL && _match_routes(filter, &rt)) {
-      filter->cb_get(filter, &rt);
-    }
+  result = _routing_parse_nlmsg(&netlink_payload, header);
+  if (result < 0) {
+    OONF_WARN(LOG_OS_ROUTING, "Error while processing route reply (result %d)", result);
+    return;
   }
-  else {
-    /* send route events to listeners */
-    list_for_each_element(&_rtnetlink_listener, listener, _internal._node) {
-      listener->cb_get(&rt, msg->nlmsg_type == RTM_NEWROUTE);
-    }
+  if (result > 0) {
+    OONF_DEBUG(LOG_OS_ROUTING, "Ignore incoming routing message");
+    return;
+  }
+
+  OONF_DEBUG(LOG_OS_ROUTING, "%s %s", header->nlmsg_type == RTM_NEWROUTE ? "route added" : "route removed",
+             os_routing_to_string(&rbuf, &netlink_payload.p));
+
+  filter = container_of(msg, struct os_route, _internal.msg);
+  if (_match_routes(filter, &netlink_payload)) {
+    filter->cb_get(filter, &netlink_payload);
   }
 }
 
@@ -663,36 +678,17 @@ _cb_rtnetlink_message(struct nlmsghdr *msg) {
  * @param err error value
  */
 static void
-_cb_rtnetlink_error(uint32_t seq, int err) {
+_cb_rtnetlink_error(struct os_system_netlink_message *nl_msg) {
   struct os_route *route;
 #ifdef OONF_LOG_DEBUG_INFO
   struct os_route_str rbuf;
 #endif
 
-  route = avl_find_element(&_rtnetlink_feedback, &seq, route, _internal._node);
-  if (route) {
-    OONF_DEBUG(LOG_OS_ROUTING, "Route seqno %u failed: %s (%d) %s", seq, strerror(err), err,
-      os_routing_to_string(&rbuf, &route->p));
+  route = container_of(nl_msg, struct os_route, _internal.msg);
+  OONF_DEBUG(LOG_OS_ROUTING, "Route seqno %u failed: %s (%d) %s",
+             nl_msg->message->nlmsg_seq, strerror(nl_msg->result), nl_msg->result, os_routing_to_string(&rbuf, &route->p));
 
-    _routing_finished(route, err);
-  }
-  else {
-    OONF_DEBUG(LOG_OS_ROUTING, "Unknown route with seqno %u failed: %s (%d)", seq, strerror(err), err);
-  }
-}
-
-/**
- * Handle ack timeout from netlink socket
- */
-static void
-_cb_rtnetlink_timeout(void) {
-  struct os_route *route, *rt_it;
-
-  OONF_WARN(LOG_OS_ROUTING, "Netlink timeout for routing");
-
-  avl_for_each_element_safe(&_rtnetlink_feedback, route, _internal._node, rt_it) {
-    _routing_finished(route, -1);
-  }
+  _routing_finished(route, nl_msg->result);
 }
 
 /**
@@ -700,17 +696,16 @@ _cb_rtnetlink_timeout(void) {
  * @param seq netlink sequence number
  */
 static void
-_cb_rtnetlink_done(uint32_t seq) {
+_cb_rtnetlink_done(struct os_system_netlink_message *nl_msg) {
   struct os_route *route;
 #ifdef OONF_LOG_DEBUG_INFO
   struct os_route_str rbuf;
 #endif
 
-  OONF_DEBUG(LOG_OS_ROUTING, "Got done: %u", seq);
+  OONF_DEBUG(LOG_OS_ROUTING, "received done message (seq=%u)", nl_msg->message->nlmsg_seq);
 
-  route = avl_find_element(&_rtnetlink_feedback, &seq, route, _internal._node);
-  if (route) {
-    OONF_DEBUG(LOG_OS_ROUTING, "Route %s with seqno %u done", os_routing_to_string(&rbuf, &route->p), seq);
-    _routing_finished(route, 0);
-  }
+  route = container_of(nl_msg, struct os_route, _internal.msg);
+  OONF_DEBUG(LOG_OS_ROUTING, "Route done (seq=%u): %s", 
+             nl_msg->message->nlmsg_seq, os_routing_to_string(&rbuf, &route->p));
+  _routing_finished(route, 0);
 }

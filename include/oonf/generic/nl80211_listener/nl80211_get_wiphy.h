@@ -51,7 +51,7 @@
 #include <oonf/generic/nl80211_listener/nl80211_listener.h>
 
 void nl80211_send_get_wiphy(
-  struct os_system_netlink *nl, struct nlmsghdr *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
+  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
 void nl80211_process_get_wiphy_result(struct nl80211_if *interf, struct nlmsghdr *hdr);
 void nl80211_finalize_get_wiphy(struct nl80211_if *interf);
 

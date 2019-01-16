@@ -43,13 +43,18 @@
  * @file
  */
 
-#ifndef NL80211_GET_MPP_H_
-#define NL80211_GET_MPP_H_
+#ifndef OS_FD_DATA_H_
+#define OS_FD_DATA_H_
 
-#include <oonf/generic/nl80211_listener/nl80211_listener.h>
+/* pre-definition of structs */
+struct os_fd;
+struct os_fd_select;
 
-void nl80211_send_get_mpp(
-  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
-void nl80211_process_get_mpp_result(struct nl80211_if *interf, struct nlmsghdr *);
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_fd_linux_data.h>
+#elif defined(BSD)
+#error "Unknown operation system"
+#endif
 
-#endif /* NL80211_GET_MPP_H_ */
+#endif /* OS_FD_DATA_H_ */

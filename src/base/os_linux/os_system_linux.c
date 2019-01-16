@@ -62,9 +62,13 @@
 #include <unistd.h>
 
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
+#include <oonf/libcommon/avl_comp.h>
+#include <oonf/libcommon/list.h>
 #include <oonf/libcommon/string.h>
 #include <oonf/libcore/oonf_subsystem.h>
 #include <oonf/base/oonf_socket.h>
+#include <oonf/base/oonf_class.h>
 
 #include <oonf/base/os_linux/os_system_linux.h>
 #include <oonf/base/os_system.h>
@@ -79,31 +83,58 @@
 /* Definitions */
 #define LOG_OS_SYSTEM _oonf_os_system_subsystem.logging
 
+enum {
+  NETLINK_MESSAGE_BLOCK_SIZE = 4096,
+};
+
 /* prototypes */
 static int _init(void);
 static void _cleanup(void);
 
 static void _cb_handle_netlink_timeout(struct oonf_timer_instance *);
 static void _netlink_handler(struct oonf_socket_entry *entry);
-static void _enqueue_netlink_buffer(struct os_system_netlink *nl);
-static void _handle_nl_err(struct os_system_netlink *, struct nlmsghdr *);
-static void _flush_netlink_buffer(struct os_system_netlink *nl);
 
 /* static buffers for receiving/sending a netlink message */
-static struct sockaddr_nl _netlink_nladdr = { .nl_family = AF_NETLINK };
-
-static struct iovec _netlink_rcv_iov;
-static struct msghdr _netlink_rcv_msg = { &_netlink_nladdr, sizeof(_netlink_nladdr), &_netlink_rcv_iov, 1, NULL, 0, 0 };
-
-static struct nlmsghdr _netlink_hdr_done = { .nlmsg_len = sizeof(struct nlmsghdr), .nlmsg_type = NLMSG_DONE };
-
-static struct iovec _netlink_send_iov[] = {
-  { NULL, 0 },
-  { &_netlink_hdr_done, sizeof(_netlink_hdr_done) },
+static struct sockaddr_nl _netlink_nladdr = {
+  .nl_family = AF_NETLINK,
+  .nl_pid    = 0,
+  .nl_groups = 0,
 };
 
-static struct msghdr _netlink_send_msg = { &_netlink_nladdr, sizeof(_netlink_nladdr), _netlink_send_iov,
-  ARRAYSIZE(_netlink_send_iov), NULL, 0, 0 };
+static void *_netlink_rcv_buffer = NULL;
+static size_t _netlink_rcv_size = 0;
+
+static struct iovec _netlink_rcv_iov = {
+  .iov_base = NULL,
+  .iov_len  = 0
+};
+
+static struct msghdr _netlink_rcv_msg = { 
+  .msg_name         = &_netlink_nladdr,
+  .msg_namelen      = sizeof(_netlink_nladdr),
+  .msg_iov          = &_netlink_rcv_iov,
+  .msg_iovlen       = 1,
+  .msg_control      = NULL,
+  .msg_controllen   = 0,
+  .msg_flags        = 0
+};
+
+static struct nlmsghdr _netlink_hdr_done = {
+  .nlmsg_len = sizeof(struct nlmsghdr),
+  .nlmsg_type = NLMSG_DONE, 
+  .nlmsg_flags = 0,
+};
+static struct iovec _netlink_send_iov[32];
+
+static struct msghdr _netlink_send_msg = {
+  .msg_name       = &_netlink_nladdr, 
+  .msg_namelen    = sizeof(_netlink_nladdr), 
+  .msg_iov        = _netlink_send_iov,
+  .msg_iovlen     = ARRAYSIZE(_netlink_send_iov),
+  .msg_control    = NULL,
+  .msg_controllen = 0,
+  .msg_flags      = 0
+};
 
 /* netlink timeout handling */
 static struct oonf_timer_class _netlink_timer = {
@@ -114,6 +145,7 @@ static struct oonf_timer_class _netlink_timer = {
 /* subsystem definition */
 static const char *_dependencies[] = {
   OONF_SOCKET_SUBSYSTEM,
+  OONF_CLASS_SUBSYSTEM,
 };
 
 static struct oonf_subsystem _oonf_os_system_subsystem = {
@@ -131,8 +163,13 @@ static uint32_t _seq_used = 0;
 /* global ioctl sockets for ipv4 and ipv6 */
 static int _ioctl_v4, _ioctl_v6;
 
-/* empty netlink buffer */
-static struct os_system_netlink_buffer _dummy_buffer;
+/* tree of netlink protocols */
+static struct avl_tree _netlink_protocol_tree;
+
+static struct oonf_class _netlink_protocol = {
+  .name = "netlink protocol",
+  .size = sizeof(struct os_system_netlink_socket),
+};
 
 /**
  * Initialize os-specific subsystem
@@ -140,9 +177,16 @@ static struct os_system_netlink_buffer _dummy_buffer;
  */
 static int
 _init(void) {
+  _netlink_rcv_buffer = calloc(NETLINK_MESSAGE_BLOCK_SIZE, 1);
+  if (!_netlink_rcv_buffer) {
+    return -1;
+  }
+  _netlink_rcv_size = NETLINK_MESSAGE_BLOCK_SIZE;
+  
   _ioctl_v4 = socket(AF_INET, SOCK_DGRAM, 0);
   if (_ioctl_v4 == -1) {
     OONF_WARN(LOG_OS_SYSTEM, "Cannot open ipv4 ioctl socket: %s (%d)", strerror(errno), errno);
+    free(_netlink_rcv_buffer);
     return -1;
   }
 
@@ -152,6 +196,8 @@ _init(void) {
   }
 
   oonf_timer_add(&_netlink_timer);
+  avl_init(&_netlink_protocol_tree, avl_comp_int32, false);
+  oonf_class_add(&_netlink_protocol);
   return 0;
 }
 
@@ -160,11 +206,13 @@ _init(void) {
  */
 static void
 _cleanup(void) {
+  oonf_class_remove(&_netlink_protocol);
   oonf_timer_remove(&_netlink_timer);
   close(_ioctl_v4);
   if (_ioctl_v6 != -1) {
     close(_ioctl_v6);
   }
+  free(_netlink_rcv_buffer);
 }
 
 /**
@@ -242,6 +290,90 @@ os_system_linux_linux_get_ioctl_fd(int af_type) {
   }
 }
 
+static struct os_system_netlink_socket *
+_add_netlink(int32_t protocol) {
+  struct os_system_netlink_socket *nl_sock;
+  static uint32_t socket_id = 0;
+  struct sockaddr_nl addr;
+  int recvbuf;
+  int fd;
+
+  nl_sock = avl_find_element(&_netlink_protocol_tree, &protocol, nl_sock, _node);
+  if (nl_sock) {
+    return nl_sock;
+  }
+  
+  nl_sock = oonf_class_malloc(&_netlink_protocol);
+  if (!nl_sock) {
+    return NULL;
+  }
+
+  fd = socket(PF_NETLINK, SOCK_RAW, protocol);
+  if (fd < 0) {
+    OONF_WARN(LOG_OS_SYSTEM, "Cannot open netlink socket type %d: %s (%d)",
+              protocol, strerror(errno), errno);
+    goto os_add_netlink_fail;
+  }
+
+  if (os_fd_init(&nl_sock->nl_socket.fd, fd)) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink %d: Could not initialize socket representation", protocol);
+    goto os_add_netlink_fail;
+  }
+  nl_sock->in = calloc(1, NETLINK_MESSAGE_BLOCK_SIZE);
+  if (nl_sock->in == NULL) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink type %d: Not enough memory for input buffer", protocol);
+    goto os_add_netlink_fail;
+  }
+  nl_sock->in_max_len = NETLINK_MESSAGE_BLOCK_SIZE;
+
+  memset(&addr, 0, sizeof(addr));
+  addr.nl_family = AF_NETLINK;
+  addr.nl_pid = (((uint32_t)getpid()) & ((1u<<22)-1)) + (socket_id << 22);
+  nl_sock->pid = addr.nl_pid;
+  socket_id++;
+
+#if defined(SO_RCVBUF)
+  recvbuf = 65536;
+  if (setsockopt(nl_sock->nl_socket.fd.fd, SOL_SOCKET, SO_RCVBUF, &recvbuf, sizeof(recvbuf))) {
+    OONF_WARN(LOG_OS_SYSTEM,
+    "Netlink type %d: Cannot setup receive buffer size for socket: %s (%d)\n",
+    protocol, strerror(errno), errno);
+  }
+#endif
+
+  if (bind(nl_sock->nl_socket.fd.fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink type %d: Could not bind socket: %s (%d)", protocol, strerror(errno), errno);
+    goto os_add_netlink_fail;
+  }
+
+  nl_sock->nl_socket.name = "os_system_netlink";
+  nl_sock->nl_socket.process = _netlink_handler;
+  oonf_socket_add(&nl_sock->nl_socket);
+  oonf_socket_set_read(&nl_sock->nl_socket, true);
+
+  nl_sock->timeout.class = &_netlink_timer;
+
+  OONF_DEBUG(LOG_OS_SYSTEM, "Netlink type %d: Bound netlink socket pid %u",
+            protocol, addr.nl_pid);
+
+  nl_sock->netlink_type = protocol;
+  nl_sock->_node.key = &nl_sock->netlink_type;
+  avl_insert(&_netlink_protocol_tree, &nl_sock->_node);
+
+  list_init_head(&nl_sock->buffered_messages);
+  list_init_head(&nl_sock->sent_messages);
+  list_init_head(&nl_sock->handlers);
+  return nl_sock;
+
+os_add_netlink_fail:
+  os_fd_invalidate(&nl_sock->nl_socket.fd);
+  if (fd != -1) {
+    close(fd);
+  }
+  free(nl_sock->in);
+  return NULL;
+}
+
 /**
  * Open a new bidirectional netlink socket
  * @param nl pointer to initialized netlink socket handler
@@ -250,73 +382,35 @@ os_system_linux_linux_get_ioctl_fd(int af_type) {
  */
 int
 os_system_linux_netlink_add(struct os_system_netlink *nl, int protocol) {
-  struct sockaddr_nl addr;
-  int recvbuf;
-  int fd;
-
-  fd = socket(PF_NETLINK, SOCK_RAW, protocol);
-  if (fd < 0) {
-    OONF_WARN(nl->used_by->logging, "Cannot open netlink socket '%s': %s (%d)", nl->name, strerror(errno), errno);
-    goto os_add_netlink_fail;
+  size_t i;
+  nl->nl_socket = _add_netlink(protocol);
+  if (!nl->nl_socket) {
+    return -1;
   }
-
-  if (os_fd_init(&nl->socket.fd, fd)) {
-    OONF_WARN(nl->used_by->logging, "Could not initialize socket representation");
-    goto os_add_netlink_fail;
+  
+  for (i = 0; i < nl->multicast_count; i++) {
+    if (setsockopt(os_fd_get_fd(&nl->nl_socket->nl_socket.fd),
+        SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, &nl->multicast[i], sizeof(nl->multicast[i]))) {
+      OONF_WARN(nl->used_by->logging, "Netlink '%s': could not join mc group: %d", 
+                nl->name, nl->multicast[i]);
+      return -1;
+    }
   }
-  if (abuf_init(&nl->out)) {
-    OONF_WARN(nl->used_by->logging,
-      "Not enough memory for"
-      " netlink '%s'output buffer",
-      nl->name);
-    goto os_add_netlink_fail;
-  }
-  abuf_memcpy(&nl->out, &_dummy_buffer, sizeof(_dummy_buffer));
-
-  nl->in = calloc(1, getpagesize());
-  if (nl->in == NULL) {
-    OONF_WARN(nl->used_by->logging, "Not enough memory for netlink '%s' input buffer", nl->name);
-    goto os_add_netlink_fail;
-  }
-  nl->in_len = getpagesize();
-
-  memset(&addr, 0, sizeof(addr));
-  addr.nl_family = AF_NETLINK;
-
-#if defined(SO_RCVBUF)
-  recvbuf = 65536 * 16;
-  if (setsockopt(nl->socket.fd.fd, SOL_SOCKET, SO_RCVBUF, &recvbuf, sizeof(recvbuf))) {
-    OONF_WARN(nl->used_by->logging,
-      "Cannot setup receive buffer size for"
-      " netlink socket '%s': %s (%d)\n",
-      nl->name, strerror(errno), errno);
-  }
-#endif
-
-  if (bind(nl->socket.fd.fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    OONF_WARN(nl->used_by->logging, "Could not bind netlink socket %s: %s (%d)", nl->name, strerror(errno), errno);
-    goto os_add_netlink_fail;
-  }
-
-  nl->socket.name = "os_system_netlink";
-  nl->socket.process = _netlink_handler;
-  oonf_socket_add(&nl->socket);
-  oonf_socket_set_read(&nl->socket, true);
-
-  nl->timeout.class = &_netlink_timer;
-
-  list_init_head(&nl->buffered);
+  
+  list_add_tail(&nl->nl_socket->handlers, &nl->_node);
   return 0;
+}
 
-os_add_netlink_fail:
-  os_fd_invalidate(&nl->socket.fd);
-  if (fd != -1) {
-    close(fd);
+static void 
+_remove_protocol(struct os_system_netlink_socket *nl_socket) {
+  if (os_fd_is_initialized(&nl_socket->nl_socket.fd)) {
+    oonf_socket_remove(&nl_socket->nl_socket);
+
+    os_fd_close(&nl_socket->nl_socket.fd);
   }
-  free(nl->in);
-  abuf_free(&nl->out);
-  fd = -1;
-  return -1;
+  free(nl_socket->in);
+  avl_remove(&_netlink_protocol_tree, &nl_socket->_node);
+  oonf_class_free(&_netlink_protocol, nl_socket);
 }
 
 /**
@@ -325,106 +419,53 @@ os_add_netlink_fail:
  */
 void
 os_system_linux_netlink_remove(struct os_system_netlink *nl) {
-  if (os_fd_is_initialized(&nl->socket.fd)) {
-    oonf_socket_remove(&nl->socket);
+  struct os_system_netlink_socket *nl_socket;
+  nl_socket = nl->nl_socket;
 
-    os_fd_close(&nl->socket.fd);
-    free(nl->in);
-    abuf_free(&nl->out);
+  list_remove(&nl->_node);
+  if (!list_is_empty(&nl_socket->handlers)) {
+    return;
   }
-}
-
-/**
- * add netlink message to buffer
- * @param nl netlink message
- */
-static void
-_enqueue_netlink_buffer(struct os_system_netlink *nl) {
-  struct os_system_netlink_buffer *bufptr;
-
-  /* initialize new buffer */
-  bufptr = (struct os_system_netlink_buffer *)abuf_getptr(&nl->out);
-  bufptr->total = abuf_getlen(&nl->out) - sizeof(*bufptr);
-  bufptr->messages = nl->out_messages;
-
-  /* append to end of queue */
-  list_add_tail(&nl->buffered, &bufptr->_node);
-  nl->out_messages = 0;
-
-  /* get a new outgoing buffer */
-  abuf_init(&nl->out);
-  abuf_memcpy(&nl->out, &_dummy_buffer, sizeof(_dummy_buffer));
+  _remove_protocol(nl_socket);
 }
 
 /**
  * Add a netlink message to the outgoign queue of a handler
  * @param nl pointer to netlink handler
  * @param nl_hdr pointer to netlink message
- * @return sequence number used for message
  */
-int
-os_system_linux_netlink_send(struct os_system_netlink *nl, struct nlmsghdr *nl_hdr) {
+void
+os_system_linux_netlink_send(struct os_system_netlink *nl, struct os_system_netlink_message *msg) {
+  struct os_system_netlink_socket *nl_socket;
+  struct nlmsghdr *hdr;
+  
+  nl_socket = nl->nl_socket;
+  hdr = msg->message;
+  OONF_ASSERT(msg->message, LOG_OS_SYSTEM, "no netlink message");
   _seq_used = (_seq_used + 1) & INT32_MAX;
-  OONF_DEBUG(
-    nl->used_by->logging, "Prepare to send netlink '%s' message %u (%u bytes)", nl->name, _seq_used, nl_hdr->nlmsg_len);
-
-  nl_hdr->nlmsg_seq = _seq_used;
-  nl_hdr->nlmsg_flags |= NLM_F_ACK | NLM_F_MULTI;
-
-  if (nl_hdr->nlmsg_len + abuf_getlen(&nl->out) > (size_t)getpagesize()) {
-    _enqueue_netlink_buffer(nl);
+  if (_seq_used == 0) {
+    _seq_used++;
   }
-  abuf_memcpy(&nl->out, nl_hdr, nl_hdr->nlmsg_len);
 
-  OONF_DEBUG_HEX(nl->used_by->logging, nl_hdr, nl_hdr->nlmsg_len, "Content of netlink '%s' message:", nl->name);
+  /* initialize os_system header */
+  msg->dump = (hdr->nlmsg_flags & NLM_F_DUMP) == NLM_F_DUMP;
+  msg->originator = nl;
+  msg->result = -1;
 
-  nl->out_messages++;
+  /* finish netlink header */
+  hdr->nlmsg_seq = _seq_used;
+  hdr->nlmsg_pid = nl_socket->pid;
+  hdr->nlmsg_flags |= NLM_F_ACK;
+
+  OONF_DEBUG_HEX(nl->used_by->logging, hdr, hdr->nlmsg_len, 
+                 "Netlink '%s': Append message (type=%u, len=%u, seq=%u, pid=%u, flags=0x%04x)", 
+                 nl->name, hdr->nlmsg_type, hdr->nlmsg_len, hdr->nlmsg_seq, hdr->nlmsg_pid, hdr->nlmsg_flags);
 
   /* trigger write */
-  if (nl->msg_in_transit == 0) {
-    oonf_socket_set_write(&nl->socket, true);
+  if (list_is_empty(&nl_socket->buffered_messages) && list_is_empty(&nl_socket->sent_messages)) {
+    oonf_socket_set_write(&nl_socket->nl_socket, true);
   }
-  return _seq_used;
-}
-
-/**
- * Join a list of multicast groups for a netlink socket
- * @param nl pointer to netlink handler
- * @param groups pointer to array of multicast groups
- * @param groupcount number of entries in groups array
- * @return -1 if an error happened, 0 otherwise
- */
-int
-os_system_linux_netlink_add_mc(struct os_system_netlink *nl, const uint32_t *groups, size_t groupcount) {
-  size_t i;
-
-  for (i = 0; i < groupcount; i++) {
-    if (setsockopt(os_fd_get_fd(&nl->socket.fd), SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, &groups[i], sizeof(groups[i]))) {
-      OONF_WARN(nl->used_by->logging, "Could not join netlink '%s' mc group: %x", nl->name, groups[i]);
-      return -1;
-    }
-  }
-  return 0;
-}
-
-/**
- * Leave a list of multicast groups for a netlink socket
- * @param nl pointer to netlink handler
- * @param groups pointer to array of multicast groups
- * @param groupcount number of entries in groups array
- * @return -1 if an error happened, 0 otherwise
- */
-int
-os_system_linux_netlink_drop_mc(struct os_system_netlink *nl, const int *groups, size_t groupcount) {
-  size_t i;
-
-  for (i = 0; i < groupcount; i++) {
-    if (setsockopt(os_fd_get_fd(&nl->socket.fd), SOL_NETLINK, NETLINK_DROP_MEMBERSHIP, &groups[i], sizeof(groups[i]))) {
-      OONF_WARN(nl->used_by->logging, "Could not drop netlink '%s' mc group: %x", nl->name, groups[i]);
-      return -1;
-    }
-  }
-  return 0;
+  list_add_tail(&nl->nl_socket->buffered_messages, &msg->_node);
 }
 
 /**
@@ -437,26 +478,28 @@ os_system_linux_netlink_drop_mc(struct os_system_netlink *nl, const int *groups,
  * @return -1 if netlink message got too large, 0 otherwise
  */
 int
-os_system_linux_netlink_addreq(
-  struct os_system_netlink *nl, struct nlmsghdr *nlmsg, int type, const void *data, int len) {
+os_system_linux_netlink_addreq(struct os_system_netlink_message *nl_msg, int type, const void *data, int len) {
+  struct nlmsghdr *hdr;
   struct nlattr *nl_attr;
   size_t aligned_msg_len, aligned_attr_len;
 
-  /* calculate aligned length of message and new attribute */
-  aligned_msg_len = NLMSG_ALIGN(nlmsg->nlmsg_len);
-  aligned_attr_len = NLA_HDRLEN + len;
+  hdr = nl_msg->message;
 
-  if (aligned_msg_len + aligned_attr_len > UIO_MAXIOV) {
-    OONF_WARN(LOG_OS_SYSTEM, "Netlink '%s' message got too large!", nl->name);
+  /* calculate aligned length of message and new attribute */
+  aligned_msg_len = NLMSG_ALIGN(hdr->nlmsg_len);
+  aligned_attr_len = NLMSG_ALIGN(NLA_HDRLEN + len);
+
+  if (aligned_msg_len + aligned_attr_len > nl_msg->max_length) {
+    OONF_WARN(LOG_OS_SYSTEM, "Netlink '%s:' message got too large!", nl_msg->originator->name);
     return -1;
   }
 
-  nl_attr = (struct nlattr *)((void *)((char *)nlmsg + aligned_msg_len));
+  nl_attr = (struct nlattr *)((void *)((char *)hdr + aligned_msg_len));
   nl_attr->nla_type = type;
   nl_attr->nla_len = aligned_attr_len;
 
   /* fix length of netlink message */
-  nlmsg->nlmsg_len = aligned_msg_len + aligned_attr_len;
+  hdr->nlmsg_len = aligned_msg_len + aligned_attr_len;
 
   if (len) {
     memcpy((char *)nl_attr + NLA_HDRLEN, data, len);
@@ -470,98 +513,126 @@ os_system_linux_netlink_addreq(
  */
 static void
 _cb_handle_netlink_timeout(struct oonf_timer_instance *ptr) {
-  struct os_system_netlink *nl;
+  struct os_system_netlink_socket *nl_socket;
+  struct os_system_netlink_message *msg, *msg_it;
+  
+  nl_socket = container_of(ptr, struct os_system_netlink_socket, timeout);
 
-  nl = container_of(ptr, struct os_system_netlink, timeout);
-
-  if (nl->cb_timeout) {
-    nl->cb_timeout();
+  list_for_each_element_safe(&nl_socket->sent_messages, msg, _node, msg_it) {
+    if (msg->originator->cb_error) {
+      msg->originator->cb_error(msg);
+    }
+    list_remove(&msg->_node);
   }
-  nl->msg_in_transit = 0;
+  
+  oonf_socket_set_write(&nl_socket->nl_socket, !list_is_empty(&nl_socket->buffered_messages));
 }
 
-/**
- * Send all netlink messages in the outgoing queue to the kernel
- * @param nl pointer to netlink handler
- */
 static void
-_flush_netlink_buffer(struct os_system_netlink *nl) {
-  struct os_system_netlink_buffer *buffer;
+_send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
+  struct os_system_netlink_message *nl_msg, *nl_msg_it;
+  size_t i, count, size;
+  struct nlmsghdr *nl_hdr;
   ssize_t ret;
   int err;
-
-  if (nl->msg_in_transit > 0) {
-    oonf_socket_set_write(&nl->socket, false);
+  if (!list_is_empty(&nl_socket->sent_messages)) {
+    /* still messages in transit */
     return;
   }
-
-  if (list_is_empty(&nl->buffered)) {
-    if (abuf_getlen(&nl->out) > sizeof(struct os_system_netlink_buffer)) {
-      _enqueue_netlink_buffer(nl);
-    }
-    else {
-      oonf_socket_set_write(&nl->socket, false);
-      return;
-    }
+  if (list_is_empty(&nl_socket->buffered_messages)) {
+    oonf_socket_set_write(&nl_socket->nl_socket, false);
+    return;
   }
+ 
+  count = 0;
+  size = _netlink_hdr_done.nlmsg_len;
 
-  /* get first buffer */
-  buffer = list_first_element(&nl->buffered, buffer, _node);
+  nl_msg = list_first_element(&nl_socket->buffered_messages, nl_msg, _node);
+  do {
+    _netlink_send_iov[count].iov_base = nl_msg->message;
+    _netlink_send_iov[count].iov_len = nl_msg->message->nlmsg_len;
 
-  /* send outgoing message */
-  _netlink_send_iov[0].iov_base = (char *)(buffer) + sizeof(*buffer);
-  _netlink_send_iov[0].iov_len = buffer->total;
+    OONF_INFO(LOG_OS_SYSTEM, "Sending netlink message from %s with seq %d",
+              nl_msg->originator->name, nl_msg->message->nlmsg_seq);
 
-  if ((ret = sendmsg(os_fd_get_fd(&nl->socket.fd), &_netlink_send_msg, MSG_DONTWAIT)) <= 0) {
+    /* move to sent list */
+    list_remove(&nl_msg->_node);
+    list_add_tail(&nl_socket->sent_messages, &nl_msg->_node);
+    count++;
+    size += nl_msg->message->nlmsg_len;
+
+    if (nl_msg->dump) {
+      /* no aggregation of dump netlink commands */
+      break;
+    }
+
+    nl_msg = list_first_element(&nl_socket->buffered_messages, nl_msg, _node);
+  } while (!list_is_empty(&nl_socket->buffered_messages)
+      && count < ARRAYSIZE(_netlink_send_iov)-1
+      && !nl_msg->dump
+      && size + nl_msg->message->nlmsg_len < NETLINK_MESSAGE_BLOCK_SIZE);
+
+  /* fix IO vector */
+  if (count > 1) {
+    for (i=0; i<count; i++) {
+      nl_hdr = _netlink_send_iov[i].iov_base;
+      nl_hdr->nlmsg_flags |= NLM_F_MULTI;
+    }
+    _netlink_send_iov[count].iov_base = &_netlink_hdr_done;
+    _netlink_send_iov[count].iov_len = sizeof(_netlink_hdr_done);
+  }
+  _netlink_send_msg.msg_iovlen = count;
+  
+  if ((ret = sendmsg(os_fd_get_fd(&nl_socket->nl_socket.fd), &_netlink_send_msg, MSG_DONTWAIT)) <= 0) {
+    /* a transmission error happened */
     err = errno;
 #if EAGAIN == EWOULDBLOCK
     if (err != EAGAIN) {
 #else
     if (err != EAGAIN && err != EWOULDBLOCK) {
 #endif
-      OONF_WARN(nl->used_by->logging,
-        "Cannot send data (%" PRINTF_SIZE_T_SPECIFIER " bytes)"
-        " to netlink socket %s: %s (%d)",
-        abuf_getlen(&nl->out), nl->name, strerror(err), err);
+      /* something serious happened */
+      OONF_WARN(LOG_OS_SYSTEM,
+        "Netlink '%d': Cannot send data (%" PRINTF_SIZE_T_SPECIFIER " bytes): %s (%d)",
+        nl_socket->netlink_type, size, strerror(err), err);
 
-      /* remove netlink message from internal queue */
-      nl->cb_error(nl->in->nlmsg_seq, err);
+      /* report error */
+      list_for_each_element_safe(&nl_socket->sent_messages, nl_msg, _node,  nl_msg_it) {
+        list_remove(&nl_msg->_node);
+        nl_msg->result = err;
+        if (nl_msg->originator->cb_error) {
+          nl_msg->originator->cb_error(nl_msg);
+        }
+      }
+    }
+    else {
+      /* just try again later, shuffle messages back to transmission queue */
+      list_for_each_element_reverse_safe(&nl_socket->sent_messages, nl_msg, _node,  nl_msg_it) {
+        list_remove(&nl_msg->_node);
+        list_add_head(&nl_socket->buffered_messages, &nl_msg->_node);
+      }
     }
   }
   else {
-    nl->msg_in_transit += buffer->messages;
-
-    OONF_DEBUG(nl->used_by->logging, "netlink %s: Sent %u bytes (%u messages in transit)", nl->name, buffer->total,
-      nl->msg_in_transit);
+    OONF_DEBUG(LOG_OS_SYSTEM, "Netlink '%d': Sent %"PRINTF_SSIZE_T_SPECIFIER" bytes "
+                              "(%"PRINTF_SIZE_T_SPECIFIER" messages in transit)", 
+               nl_socket->netlink_type, size, count);
 
     /* start feedback timer */
-    oonf_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT);
+    oonf_timer_set(&nl_socket->timeout, OS_SYSTEM_NETLINK_TIMEOUT);
   }
-
-  list_remove(&buffer->_node);
-  free(buffer);
-
-  oonf_socket_set_write(&nl->socket, !list_is_empty(&nl->buffered));
 }
 
-/**
- * Cleanup netlink handler because all outstanding jobs
- * are finished
- * @param nl pointer to os_system_netlink handler
- */
-static void
-_netlink_job_finished(struct os_system_netlink *nl) {
-  if (nl->msg_in_transit > 0) {
-    nl->msg_in_transit--;
-  }
-  if (nl->msg_in_transit == 0) {
-    oonf_timer_stop(&nl->timeout);
+static struct os_system_netlink_message *
+_find_matching_message(struct os_system_netlink_socket *nl_socket, uint32_t seqno) {
+  struct os_system_netlink_message *nl_msg;
 
-    if (!list_is_empty(&nl->buffered) || nl->out_messages > 0) {
-      oonf_socket_set_write(&nl->socket, true);
+  list_for_each_element(&nl_socket->sent_messages, nl_msg, _node) {
+    if (nl_msg->message->nlmsg_seq == seqno) {
+      return nl_msg;
     }
   }
-  OONF_DEBUG(nl->used_by->logging, "netlink '%s' finished: %d still in transit", nl->name, nl->msg_in_transit);
+  return NULL;
 }
 
 /**
@@ -570,17 +641,18 @@ _netlink_job_finished(struct os_system_netlink *nl) {
  */
 static void
 _netlink_handler(struct oonf_socket_entry *entry) {
-  struct os_system_netlink *nl;
+  struct os_system_netlink_socket *nl_socket;
+  struct os_system_netlink_message *nl_msg;
+  struct os_system_netlink *nl_handler;
   struct nlmsghdr *nh;
+  struct nlmsgerr *err;
   ssize_t ret;
-  size_t len;
+  size_t len, i;
   int flags;
-  uint32_t current_seq = 0;
-  bool trigger_is_done;
 
-  nl = container_of(entry, typeof(*nl), socket);
+  nl_socket = container_of(entry, typeof(*nl_socket), nl_socket);
   if (oonf_socket_is_write(entry)) {
-    _flush_netlink_buffer(nl);
+    _send_netlink_messages(nl_socket);
   }
 
   if (!oonf_socket_is_read(entry)) {
@@ -592,78 +664,60 @@ _netlink_handler(struct oonf_socket_entry *entry) {
   flags = MSG_PEEK;
 
 netlink_rcv_retry:
-  _netlink_rcv_iov.iov_base = nl->in;
-  _netlink_rcv_iov.iov_len = nl->in_len;
+  _netlink_rcv_iov.iov_base = _netlink_rcv_buffer;
+  _netlink_rcv_iov.iov_len = _netlink_rcv_size;
 
-  OONF_DEBUG(nl->used_by->logging,
-    "Read netlink '%s' message with"
-    " %" PRINTF_SIZE_T_SPECIFIER " bytes buffer",
-    nl->name, nl->in_len);
   if ((ret = recvmsg(entry->fd.fd, &_netlink_rcv_msg, MSG_DONTWAIT | flags)) < 0) {
 #if EAGAIN == EWOULDBLOCK
     if (errno != EAGAIN) {
 #else
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
 #endif
-      OONF_WARN(nl->used_by->logging, "netlink '%s' recvmsg error: %s (%d)\n", nl->name, strerror(errno), errno);
+      OONF_WARN(LOG_OS_SYSTEM, "Netlink '%d' recvmsg error: %s (%d)\n", nl_socket->netlink_type, strerror(errno), errno);
     }
     else {
-      oonf_socket_set_read(&nl->socket, true);
+      oonf_socket_set_read(&nl_socket->nl_socket, true);
     }
     return;
   }
 
   /* not enough buffer space ? */
-  if (nl->in_len < (size_t)ret || (_netlink_rcv_msg.msg_flags & MSG_TRUNC) != 0) {
+  if (_netlink_rcv_size < (size_t)ret || (_netlink_rcv_msg.msg_flags & MSG_TRUNC) != 0) {
     void *ptr;
 
-    ret = ret / getpagesize();
+    ret = ret / NETLINK_MESSAGE_BLOCK_SIZE;
     ret++;
-    ret *= getpagesize();
+    ret *= NETLINK_MESSAGE_BLOCK_SIZE;
 
-    ptr = realloc(nl->in, ret);
+    ptr = realloc(_netlink_rcv_buffer, ret);
     if (!ptr) {
-      OONF_WARN(nl->used_by->logging,
-        "Not enough memory to"
-        " increase netlink '%s' input buffer",
-        nl->name);
+      OONF_WARN(LOG_OS_SYSTEM,
+        "Netlink '%d': Not enough memory to increase input buffer to %" PRINTF_SSIZE_T_SPECIFIER,
+        nl_socket->netlink_type, ret);
       return;
     }
-    nl->in = ptr;
-    nl->in_len = ret;
+    OONF_INFO(LOG_OS_SYSTEM,
+      "Netlink '%d': increased input buffer to %" PRINTF_SSIZE_T_SPECIFIER,
+      nl_socket->netlink_type, ret);
+    _netlink_rcv_buffer = ptr;
+    _netlink_rcv_size = ret;
     goto netlink_rcv_retry;
   }
   if (flags) {
     /* it worked, not remove the message from the queue */
     flags = 0;
-    OONF_DEBUG(nl->used_by->logging,
-      "Got estimate of netlink '%s'"
-      " message size, retrieve it",
-      nl->name);
     goto netlink_rcv_retry;
   }
 
-  OONF_DEBUG(nl->used_by->logging, "Got netlink '%s' message of %" PRINTF_SSIZE_T_SPECIFIER " bytes", nl->name, ret);
-  OONF_DEBUG_HEX(nl->used_by->logging, nl->in, ret, "Content of netlink '%s' message:", nl->name);
-
-  trigger_is_done = false;
+  OONF_DEBUG_HEX(LOG_OS_SYSTEM, _netlink_rcv_buffer, ret, 
+                 "Netlink '%d': recv data(bytes=%" PRINTF_SSIZE_T_SPECIFIER ")",
+                 nl_socket->netlink_type, ret);
 
   /* loop through netlink headers */
   len = (size_t)ret;
-  for (nh = nl->in; NLMSG_OK(nh, len); nh = NLMSG_NEXT(nh, len)) {
-    OONF_DEBUG(
-      nl->used_by->logging, "Netlink '%s' message received: type %d seq %u\n", nl->name, nh->nlmsg_type, nh->nlmsg_seq);
-
-    if (nh == nl->in) {
-      current_seq = nh->nlmsg_seq;
-    }
-
-    if (current_seq != nh->nlmsg_seq && trigger_is_done) {
-      if (nl->cb_done) {
-        nl->cb_done(current_seq);
-      }
-      trigger_is_done = false;
-    }
+  for (nh = _netlink_rcv_buffer; NLMSG_OK(nh, len); nh = NLMSG_NEXT(nh, len)) {
+    OONF_DEBUG(LOG_OS_SYSTEM, "Netlink '%d': recv msg(type=%u, len=%u, seq=%u, pid=%u, flags=0x%04x)\n", 
+               nl_socket->netlink_type, nh->nlmsg_type, nh->nlmsg_len, nh->nlmsg_seq, nh->nlmsg_pid, nh->nlmsg_flags);
 
     switch (nh->nlmsg_type) {
       case NLMSG_NOOP:
@@ -671,61 +725,61 @@ netlink_rcv_retry:
 
       case NLMSG_DONE:
         /* End of a multipart netlink message reached */
-        trigger_is_done = true;
+        nl_msg = _find_matching_message(nl_socket, nh->nlmsg_seq);
+        if (nl_msg && nl_msg->dump) {
+          list_remove(&nl_msg->_node);
+          nl_msg->originator->cb_done(nl_msg);
+        }
         break;
 
       case NLMSG_ERROR:
         /* Feedback for async netlink message */
-        trigger_is_done = false;
-        _handle_nl_err(nl, nh);
+        err = (struct nlmsgerr *)NLMSG_DATA(nh);
+        nl_msg = _find_matching_message(nl_socket, err->msg.nlmsg_seq);
+        if (nl_msg) {
+          list_remove(&nl_msg->_node);
+
+          if (err->error < 0) {
+            nl_msg->result = -err->error;
+          }
+          else {
+            nl_msg->result = err->error;
+          }
+
+          if (err->error == 0) {
+            nl_msg->originator->cb_done(nl_msg);
+          }
+          else {
+            nl_msg->originator->cb_error(nl_msg);
+          }
+        }
         break;
 
       default:
-        if (nl->cb_message) {
-          nl->cb_message(nh);
+        nl_msg = _find_matching_message(nl_socket, nh->nlmsg_seq);
+        if (nl_msg != NULL && nl_msg->originator->nl_socket->pid == nh->nlmsg_pid && nl_msg->dump) {
+          /* this is a response to a netlink dump */
+          nl_msg->originator->cb_response(nl_msg, nh);
+        }
+        else {
+          /* this seems to be multicast */
+          list_for_each_element(&nl_socket->handlers, nl_handler, _node) {
+            for (i=0; i<nl_handler->multicast_count; i++) {
+              if (nl_handler->multicast[i] == nh->nlmsg_type) {
+                nl_handler->cb_multicast(nl_handler, nh);
+                break;
+              }
+            }
+          }
         }
         break;
     }
   }
 
-  if (trigger_is_done) {
-    oonf_timer_stop(&nl->timeout);
-    if (nl->cb_done) {
-      nl->cb_done(current_seq);
-    }
-    _netlink_job_finished(nl);
-  }
-
   /* reset timeout if necessary */
-  if (oonf_timer_is_active(&nl->timeout)) {
-    oonf_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT);
+  if (list_is_empty(&nl_socket->sent_messages)) {
+    oonf_timer_stop(&nl_socket->timeout);
   }
-}
-
-/**
- * Handle result code in netlink message
- * @param nl pointer to netlink handler
- * @param nh pointer to netlink message
- */
-static void
-_handle_nl_err(struct os_system_netlink *nl, struct nlmsghdr *nh) {
-  struct nlmsgerr *err;
-
-  err = (struct nlmsgerr *)NLMSG_DATA(nh);
-
-  OONF_DEBUG(nl->used_by->logging, "Received netlink '%s' seq %u feedback (%u bytes): %s (%d)", nl->name, nh->nlmsg_seq,
-    nh->nlmsg_len, strerror(-err->error), -err->error);
-
-  if (err->error) {
-    if (nl->cb_error) {
-      nl->cb_error(err->msg.nlmsg_seq, -err->error);
-    }
-  }
-  else {
-    if (nl->cb_done) {
-      nl->cb_done(err->msg.nlmsg_seq);
-    }
-  }
-
-  _netlink_job_finished(nl);
+  oonf_socket_set_write(&nl_socket->nl_socket, 
+      list_is_empty(&nl_socket->sent_messages) && !list_is_empty(&nl_socket->buffered_messages));
 }

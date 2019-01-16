@@ -46,6 +46,8 @@
 #ifndef OS_VIF_H_
 #define OS_VIF_H_
 
+struct os_vif;
+
 #include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
 
@@ -58,7 +60,7 @@ struct os_vif;
 
 /* include os-specific headers */
 #if defined(__linux__)
-#include <oonf/base/os_linux/os_vif_linux.h>
+#include <oonf/base/os_linux/os_vif_linux_data.h>
 #else
 #error "Unknown operation system"
 #endif
@@ -120,5 +122,12 @@ static INLINE bool
 os_vif_is_active(struct os_vif *vif) {
   return avl_is_node_added(&vif->_vif_node);
 }
+
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_vif_linux.h>
+#else
+#error "Unknown operation system"
+#endif
 
 #endif /* OS_VIF_H_ */

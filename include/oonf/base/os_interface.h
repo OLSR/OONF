@@ -46,11 +46,19 @@
 #ifndef OS_INTERFACE_H_
 #define OS_INTERFACE_H_
 
+struct os_interface_ip_change;
+struct os_interface_flags;
+struct os_interface;
+struct os_interface_ip;
+struct os_interface_listener;
+
 #include <stdio.h>
 #include <sys/time.h>
 
 #include <oonf/oonf.h>
 #include <oonf/libcommon/list.h>
+#include <oonf/libcommon/netaddr.h>
+#include <oonf/libcommon/netaddr_acl.h>
 #include <oonf/libcore/oonf_logging.h>
 #include <oonf/base/oonf_timer.h>
 #include <oonf/base/os_interface.h>
@@ -63,7 +71,7 @@
 
 /* include os-specific headers */
 #if defined(__linux__)
-#include <oonf/base/os_linux/os_interface_linux_internal.h>
+#include <oonf/base/os_linux/os_interface_linux_data.h>
 #else
 #error "Unknown operation system"
 #endif
@@ -238,13 +246,6 @@ struct os_interface_listener {
   struct list_entity _node;
 };
 
-/* include os-specific headers */
-#if defined(__linux__)
-#include <oonf/base/os_linux/os_interface_linux.h>
-#else
-#error "Unknown operation system"
-#endif
-
 /* prototypes for all os_system functions */
 static INLINE struct os_interface *os_interface_add(struct os_interface_listener *);
 static INLINE void os_interface_remove(struct os_interface_listener *);
@@ -264,6 +265,13 @@ static INLINE const struct netaddr *os_interface_get_bindaddress(
   int af_type, struct netaddr_acl *filter, struct os_interface *ifdata);
 static INLINE const struct os_interface_ip *os_interface_get_prefix_from_dst(
   struct netaddr *destination, struct os_interface *ifdata);
+
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_interface_linux.h>
+#else
+#error "Unknown operation system"
+#endif
 
 /**
  * @param ifname name of an interface

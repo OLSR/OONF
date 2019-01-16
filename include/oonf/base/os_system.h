@@ -46,9 +46,6 @@
 #ifndef OS_SYSTEM_H_
 #define OS_SYSTEM_H_
 
-#include <stdio.h>
-#include <sys/time.h>
-
 #include <oonf/oonf.h>
 
 /*! subsystem identifier */
@@ -56,15 +53,18 @@
 
 /* include os-specific headers */
 #if defined(__linux__)
-#include <oonf/base/os_linux/os_system_linux.h>
-#elif defined(BSD)
-#include <oonf/base/os_bsd/os_system_bsd.h>
-#elif defined(_WIN32)
-#include <oonf/base/os_win32/os_system_win32.h>
+#include <oonf/base/os_linux/os_system_linux_data.h>
 #else
 #error "Unknown operation system"
 #endif
 
 static INLINE bool os_system_is_ipv6_supported(void);
+
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_system_linux.h>
+#else
+#error "Unknown operation system"
+#endif
 
 #endif /* OS_SYSTEM_H_ */

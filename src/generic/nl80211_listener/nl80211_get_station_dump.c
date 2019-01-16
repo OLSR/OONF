@@ -99,14 +99,14 @@ static int64_t _get_bitrate(struct nlattr *bitrate_attr);
  */
 void
 nl80211_send_get_station_dump(
-  struct os_system_netlink *nl, struct nlmsghdr *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf) {
+  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf) {
   int if_index = nl80211_get_if_baseindex(interf);
 
   hdr->cmd = NL80211_CMD_GET_STATION;
-  nl_msg->nlmsg_flags |= NLM_F_DUMP;
+  nl_msg->message->nlmsg_flags |= NLM_F_DUMP;
 
   /* add interface index to the request */
-  os_system_linux_netlink_addreq(nl, nl_msg, NL80211_ATTR_IFINDEX, &if_index, sizeof(if_index));
+  os_system_linux_netlink_addreq(nl_msg, NL80211_ATTR_IFINDEX, &if_index, sizeof(if_index));
 }
 
 /**

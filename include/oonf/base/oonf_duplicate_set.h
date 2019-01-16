@@ -46,8 +46,8 @@
 #ifndef OONF_DUPLICATE_SET_H_
 #define OONF_DUPLICATE_SET_H_
 
-#include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/base/oonf_timer.h>
 

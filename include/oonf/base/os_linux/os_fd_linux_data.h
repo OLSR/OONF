@@ -43,13 +43,42 @@
  * @file
  */
 
-#ifndef NL80211_GET_MPP_H_
-#define NL80211_GET_MPP_H_
+#ifndef OS_FD_LINUX_DATA_H_
+#define OS_FD_LINUX_DATA_H_
 
-#include <oonf/generic/nl80211_listener/nl80211_listener.h>
+#include <sys/epoll.h>
 
-void nl80211_send_get_mpp(
-  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf);
-void nl80211_process_get_mpp_result(struct nl80211_if *interf, struct nlmsghdr *);
+/*! name of the loopback interface */
+#define IF_LOOPBACK_NAME "lo"
 
-#endif /* NL80211_GET_MPP_H_ */
+enum os_fd_flags
+{
+  OS_FD_ACTIVE = 1,
+};
+
+/*! linux specific socket definition */
+struct os_fd {
+  /*! file descriptor of socket */
+  int fd;
+
+  /*! flags for telling epoll which events we are interested in */
+  uint32_t wanted_events;
+
+  /*! flags which were triggered in last epoll */
+  uint32_t received_events;
+
+  /*! flags for socket */
+  enum os_fd_flags _flags;
+};
+
+/*! linux specific socket select definition */
+struct os_fd_select {
+  struct epoll_event _events[16];
+  int _event_count;
+
+  int _epoll_fd;
+
+  uint64_t deadline;
+};
+
+#endif /* OS_FD_LINUX_DATA_H_ */
