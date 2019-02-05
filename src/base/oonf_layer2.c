@@ -545,9 +545,16 @@ oonf_layer2_net_add(const char *ifname) {
  */
 bool
 oonf_layer2_net_cleanup(struct oonf_layer2_net *l2net, const struct oonf_layer2_origin *origin, bool cleanup_neigh) {
+  struct oonf_layer2_peer_address *l2peer, *l2peer_it;
   struct oonf_layer2_neigh *l2neigh;
   bool changed = false;
   int i;
+
+  avl_for_each_element_safe(&l2net->local_peer_ips, l2peer, _net_node, l2peer_it) {
+    if (!oonf_layer2_net_remove_ip(l2peer, origin)) {
+      changed = true;
+    }
+  }
 
   for (i = 0; i < OONF_LAYER2_NET_COUNT; i++) {
     if (l2net->data[i]._origin == origin) {
@@ -612,6 +619,11 @@ bool
 oonf_layer2_net_commit(struct oonf_layer2_net *l2net) {
   size_t i;
 
+  if (l2net->local_peer_ips.count > 0) {
+    oonf_class_event(&_l2network_class, l2net, OONF_OBJECT_CHANGED);
+    return false;
+  }
+  
   if (l2net->neighbors.count > 0) {
     oonf_class_event(&_l2network_class, l2net, OONF_OBJECT_CHANGED);
     return false;
