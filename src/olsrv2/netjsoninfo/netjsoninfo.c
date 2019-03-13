@@ -792,7 +792,7 @@ _print_routing_tree(struct json_session *session, struct nhdp_domain *domain, in
   _print_json_netaddr(session, "router_addr", originator);
   json_end_object(session);
 
-  json_start_array(session, JSON_NAME_ROUTE);
+  json_start_array(session, "routes");
 
   avl_for_each_element(olsrv2_routing_get_tree(domain), rtentry, _node) {
     if (rtentry->route.p.family == af_type) {
