@@ -79,6 +79,9 @@
 /*! name of domain command/json-object */
 #define JSON_NAME_DOMAIN "domain"
 
+/*! name of domain command/json-object */
+#define JSON_NAME_ID "id"
+
 /*! Text buffer for a domain id string */
 struct domain_id_str {
   /*! string buffer */
@@ -132,6 +135,7 @@ static void _create_graph_json(struct json_session *session, const char *filter)
 static void _print_routing_tree(struct json_session *session, struct nhdp_domain *domain, int af_type);
 static void _create_route_json(struct json_session *session, const char *filter);
 static void _create_domain_json(struct json_session *session);
+static void _create_id_json(struct json_session *session);
 static void _create_error_json(struct json_session *session, const char *message, const char *parameter);
 static enum oonf_telnet_result _cb_netjsoninfo(struct oonf_telnet_data *con);
 static void _print_json_string(struct json_session *session, const char *key, const char *value);
@@ -149,7 +153,9 @@ static struct oonf_telnet_command _telnet_commands[] = {
     "The filter prefix use an id (which can be queried by 'domain') to output"
     " a single domain of route/graph without the NetworkCollection object"
     " around it. The domain_id's are ipv4_<domain_number> and ipv6_<domain_number>.\n"
-    "> netjsoninfo filter route ipv4_0\n"),
+    "> netjsoninfo filter route ipv4_0\n"
+    "Netjsoninfo 'id' returns a list of router/prefix id's to the corresponding\n"
+    "IPs/prefixes\n"),
 };
 
 /* plugin declaration */
@@ -910,6 +916,77 @@ _create_domain_json(struct json_session *session) {
   json_end_object(session);
 }
 
+static void
+_create_id_json(struct json_session *session) {
+  struct olsrv2_tc_node *tc_node;
+  struct olsrv2_tc_attachment *tc_attached;
+  struct olsrv2_lan_entry *lan;
+  struct nhdp_domain *domain;
+  struct _node_id_str node_id_str;
+  int af;
+
+  json_start_object(session, NULL);
+
+  _print_json_string(session, "type", "NetworkId");
+  _print_json_string(session, "protocol", "olsrv2");
+  _print_json_string(session, "version", oonf_log_get_libdata()->version);
+  _print_json_string(session, "revision", oonf_log_get_libdata()->git_commit);
+
+  json_start_array(session, "routers");
+
+  /* local router */
+  if (olsrv2_originator_get(AF_INET)) {
+    json_start_object(session, NULL);
+    _print_json_string(session, "router_id", _get_node_id_me(&node_id_str, AF_INET));
+    _print_json_netaddr(session, "router_addr", olsrv2_originator_get(AF_INET));
+    json_end_object(session);
+  }
+  if (olsrv2_originator_get(AF_INET6)) {
+    json_start_object(session, NULL);
+    _print_json_string(session, "router_id", _get_node_id_me(&node_id_str, AF_INET6));
+    _print_json_netaddr(session, "router_addr", olsrv2_originator_get(AF_INET6));
+    json_end_object(session);
+  }
+
+  /* remote routers */
+  avl_for_each_element(olsrv2_tc_get_tree(), tc_node, _originator_node) {
+    json_start_object(session, NULL);
+    _print_json_string(session, "router_id", _get_tc_node_id(&node_id_str, tc_node));
+    _print_json_netaddr(session, "router_addr", &tc_node->target.prefix.dst);
+    json_end_object(session);
+  }
+  json_end_array(session);
+
+  json_start_array(session, "attached");
+  /* locally attached */
+  avl_for_each_element(olsrv2_lan_get_tree(), lan, _node) {
+    af = netaddr_get_address_family(&lan->prefix.dst);
+    list_for_each_element(nhdp_domain_get_list(), domain, _node) {
+      json_start_object(session, NULL);
+      _print_json_string(session, "attached_id", _get_tc_lan_id(&node_id_str, lan));
+      _print_json_string(session, "router_id", _get_node_id_me(&node_id_str, af));
+      _print_json_netaddr(session, "router_addr", olsrv2_originator_get(af));
+      _print_json_netaddr(session, "attached_dst", &lan->prefix.dst);
+      _print_json_netaddr(session, "attached_src", &lan->prefix.src);
+      json_end_object(session);
+    }
+  }
+  /* remote prefixes */
+  avl_for_each_element(olsrv2_tc_get_tree(), tc_node, _originator_node) {
+    avl_for_each_element(&tc_node->_attached_networks, tc_attached, _src_node) {
+      json_start_object(session, NULL);
+      _print_json_string(session, "attached_id", _get_tc_endpoint_id(&node_id_str, tc_attached));
+      _print_json_string(session, "router_id", _get_tc_node_id(&node_id_str, tc_node));
+      _print_json_netaddr(session, "router_addr", &tc_node->target.prefix.dst);
+      _print_json_netaddr(session, "attached_dst", &tc_attached->dst->target.prefix.dst);
+      _print_json_netaddr(session, "attached_src", &tc_attached->dst->target.prefix.src);
+      json_end_object(session);
+    }
+  }
+  json_end_array(session);
+  json_end_object(session);
+}
+
 /**
  * Print a JSON error
  * @param session json session
@@ -939,6 +1016,9 @@ _handle_netjson_object(struct json_session *session, const char *parameter, bool
   }
   else if (!filter && (ptr = str_hasnextword(parameter, JSON_NAME_DOMAIN))) {
     _create_domain_json(session);
+  }
+  else if (!filter && (ptr = str_hasnextword(parameter, JSON_NAME_ID))) {
+    _create_id_json(session);
   }
   else {
     ptr = str_skipnextword(parameter);

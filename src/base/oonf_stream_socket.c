@@ -312,7 +312,9 @@ connect_to_error:
  */
 void
 oonf_stream_set_timeout(struct oonf_stream_session *con, uint64_t timeout) {
-  oonf_timer_set(&con->timeout, timeout);
+  if (oonf_clock_get_absolute(timeout) > oonf_timer_get_due(&con->timeout) + timeout/5) {
+    oonf_timer_set(&con->timeout, timeout);
+  }
 }
 
 /**

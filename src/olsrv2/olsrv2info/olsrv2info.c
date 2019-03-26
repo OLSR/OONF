@@ -469,7 +469,7 @@ static void
 _initialize_old_originator_values(struct olsrv2_originator_set_entry *entry) {
   netaddr_to_string(&_value_old_originator, &entry->originator);
 
-  oonf_clock_toIntervalString(&_value_old_originator_vtime, oonf_timer_get_due(&entry->_vtime));
+  oonf_timer_to_string(&_value_old_originator_vtime, &entry->_vtime);
 }
 
 /**
@@ -542,7 +542,7 @@ static void
 _initialize_node_values(struct olsrv2_tc_node *node) {
   netaddr_to_string(&_value_node, &node->target.prefix.dst);
 
-  oonf_clock_toIntervalString(&_value_node_vtime, oonf_timer_get_due(&node->_validity_time));
+  oonf_timer_to_string(&_value_node_vtime, &node->_validity_time);
 
   snprintf(_value_node_ansn, sizeof(_value_node_ansn), "%u", node->ansn);
 

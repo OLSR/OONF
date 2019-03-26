@@ -164,6 +164,24 @@ oonf_timer_get_due(const struct oonf_timer_instance *timer) {
 }
 
 /**
+ * Puts the number of seconds until the timer fires into the output buffer,
+ * or "-1" if it has already fired.
+ * @param buf target buffer
+ * @param timer timer
+ * @return pointer to string representation
+ */
+static INLINE const char *
+oonf_timer_to_string(struct isonumber_str *buf, struct oonf_timer_instance *timer) {
+  static const char NONE[] = "-1";
+  if (!oonf_timer_is_active(timer)) {
+    return NONE;
+  }
+  else {
+    return oonf_clock_toIntervalString(buf, oonf_timer_get_due(timer));
+  }
+}
+
+/**
  * This is the one stop shop for all sort of timer manipulation.
  * Depending on the passed in parameters a new timer is started,
  * or an existing timer is started or an existing timer is

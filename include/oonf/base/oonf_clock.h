@@ -177,7 +177,7 @@ EXPORT uint64_t oonf_clock_getNow(void);
 EXPORT const char *oonf_clock_toClockString(struct isonumber_str *, uint64_t);
 
 /**
- * Converts an internal time value into a string representation with
+ * Converts an internal time interval into a string representation with
  * the numbers of seconds (including milliseconds as fractions)
  * @param buf target buffer
  * @param i time value

@@ -564,14 +564,7 @@ _initialize_interface_address_values(struct nhdp_interface_addr *if_addr) {
   netaddr_to_string(&_value_if_address, &if_addr->if_addr);
 
   strscpy(_value_if_address_lost, json_getbool(if_addr->removed), sizeof(_value_if_address_lost));
-
-  if (oonf_timer_is_active(&if_addr->_vtime)) {
-    uint64_t due = oonf_timer_get_due(&if_addr->_vtime);
-    oonf_clock_toIntervalString(&_value_if_address_vtime, due);
-  }
-  else {
-    strscpy(_value_if_address_vtime.buf, "-1", sizeof(_value_if_address_vtime));
-  }
+  oonf_timer_to_string(&_value_if_address_vtime, &if_addr->_vtime);
 }
 
 /**
@@ -585,9 +578,9 @@ _initialize_nhdp_link_values(struct nhdp_link *lnk) {
   oonf_clock_toIntervalString(&_value_link_vtime_value, lnk->vtime_value);
   oonf_clock_toIntervalString(&_value_link_itime_value, lnk->itime_value);
 
-  oonf_clock_toIntervalString(&_value_link_symtime, oonf_timer_get_due(&lnk->sym_time));
-  oonf_clock_toIntervalString(&_value_link_heardtime, oonf_timer_get_due(&lnk->heard_time));
-  oonf_clock_toIntervalString(&_value_link_vtime, oonf_timer_get_due(&lnk->vtime));
+  oonf_timer_to_string(&_value_link_symtime, &lnk->sym_time);
+  oonf_timer_to_string(&_value_link_heardtime, &lnk->heard_time);
+  oonf_timer_to_string(&_value_link_vtime, &lnk->vtime);
 
   strscpy(_value_link_status, nhdp_db_link_status_to_string(lnk), sizeof(_value_link_status));
 
@@ -663,7 +656,7 @@ _initialize_nhdp_link_twohop_values(struct nhdp_l2hop *twohop) {
 
   strscpy(_value_twohop_sameif, json_getbool(twohop->same_interface), sizeof(_value_twohop_sameif));
 
-  oonf_clock_toIntervalString(&_value_twohop_vtime, oonf_timer_get_due(&twohop->_vtime));
+  oonf_timer_to_string(&_value_twohop_vtime, &twohop->_vtime);
 }
 
 /**
@@ -695,7 +688,7 @@ _initialize_nhdp_neighbor_address_values(struct nhdp_naddr *naddr) {
   strscpy(_value_neighbor_address_lost, json_getbool(oonf_timer_is_active(&naddr->_lost_vtime)),
     sizeof(_value_neighbor_address_lost));
 
-  oonf_clock_toIntervalString(&_value_neighbor_address_lost_vtime, oonf_timer_get_due(&naddr->_lost_vtime));
+  oonf_timer_to_string(&_value_neighbor_address_lost_vtime, &naddr->_lost_vtime);
 }
 
 /**
