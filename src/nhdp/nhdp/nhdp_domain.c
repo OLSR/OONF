@@ -441,14 +441,19 @@ void
 nhdp_domain_process_metric_linktlv(struct nhdp_domain *domain, struct nhdp_link *lnk, const uint8_t *value) {
   struct rfc7181_metric_field metric_field;
   uint32_t metric;
+  bool link, neigh;
 
   memcpy(&metric_field, value, sizeof(metric_field));
   metric = rfc7181_metric_decode(&metric_field);
 
-  if (rfc7181_metric_has_flag(&metric_field, RFC7181_LINKMETRIC_INCOMING_LINK)) {
+  link = rfc7181_metric_has_flag(&metric_field, RFC7181_LINKMETRIC_INCOMING_LINK);
+  neigh = rfc7181_metric_has_flag(&metric_field, RFC7181_LINKMETRIC_INCOMING_NEIGH);
+  OONF_DEBUG(LOG_NHDP_R, "Set incoming %s/%s metric: %u",
+             link ? "link":"-", neigh ? "neigh":"-", metric);
+  if (link) {
     nhdp_domain_get_linkdata(domain, lnk)->metric.out = metric;
   }
-  if (rfc7181_metric_has_flag(&metric_field, RFC7181_LINKMETRIC_INCOMING_NEIGH)) {
+  if (neigh) {
     nhdp_domain_get_neighbordata(domain, lnk->neigh)->metric.out = metric;
   }
 }

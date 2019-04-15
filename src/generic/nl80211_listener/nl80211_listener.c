@@ -484,10 +484,6 @@ _nl80211_if_add(const char *name) {
     return NULL;
   }
 
-  if (interf->l2net->if_type == OONF_LAYER2_TYPE_UNDEFINED) {
-    interf->l2net->if_type = OONF_LAYER2_TYPE_WIRELESS;
-  }
-
   /* initialize interface listener */
   interf->if_listener.name = interf->name;
   if (!os_interface_add(&interf->if_listener)) {
@@ -697,6 +693,7 @@ _cb_nl_response(struct os_system_netlink_message *nl_msg __attribute__((unused))
   }
   else if (_if_query_ops[_current_query_number].process) {
     OONF_DEBUG(LOG_NL80211, "Received Nl80211 command %u for query %u", gen_hdr->cmd, _current_query_number);
+    _current_query_if->l2net->if_type = OONF_LAYER2_TYPE_WIRELESS;
     _if_query_ops[_current_query_number].process(_current_query_if, hdr);
   }
 }

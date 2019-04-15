@@ -307,7 +307,7 @@ str_is_printable(const char *value) {
  * @param buffer_len length of target buffer
  * @param src binary source
  * @param src_len length of binary source
- * @return -1 if an error happened, length of string otherwise
+ * @return -1 if an error happened, length of string (without zero byte) otherwise
  */
 ssize_t
 strhex_from_bin(char *buffer, size_t buffer_len, const uint8_t *src, size_t src_len) {

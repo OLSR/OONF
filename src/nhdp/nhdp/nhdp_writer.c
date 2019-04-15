@@ -399,6 +399,8 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
     struct nhdp_link *lnk = NULL;
     struct nhdp_neighbor *neigh = NULL;
 
+    OONF_DEBUG(LOG_NHDP_W, "Determine metric status: %d %d %d",
+               linkstatus, otherneigh_sym, naddr->neigh->symmetric);
     if (linkstatus == NHDP_LINK_HEARD || linkstatus == NHDP_LINK_SYMMETRIC) {
       lnk = laddr->link;
     }

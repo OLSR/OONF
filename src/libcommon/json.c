@@ -128,7 +128,9 @@ json_print(struct json_session *session, const char *key, bool string, const cha
   }
   session->empty = false;
 
-  abuf_appendf(session->out, "\"%s\":", key);
+  if (key) {
+    abuf_appendf(session->out, "\"%s\":", key);
+  }
   _json_printvalue(session->out, value, string);
 }
 
