@@ -493,7 +493,7 @@ _print_edge_links(
         _print_json_integer(session, "in_cost", cost);
     _print_json_string(session, "in_text", nhdp_domain_get_link_metric_value(&mbuf, domain, cost));
 
-    _print_json_string(session, "outgoing_tree", json_getbool(outgoing && best_link == lnk));
+    _print_json_bool(session, "outgoing_tree", outgoing && best_link == lnk);
 
     json_end_object(session);
   }
@@ -539,7 +539,7 @@ _print_graph_edge(struct json_session *session, struct nhdp_domain *domain, cons
         _print_json_integer(session, "in_cost", in);
     _print_json_string(session, "in_text", nhdp_domain_get_link_metric_value(&mbuf, domain, in));
   }
-  _print_json_string(session, "outgoing_tree", json_getbool(outgoing_tree));
+  _print_json_bool(session, "outgoing_tree", outgoing_tree);
 
   if (src_addr) {
     _print_json_netaddr(session, "source_addr", src_addr);
@@ -1050,7 +1050,7 @@ _print_layer2_neighbor(struct json_session *session, struct oonf_layer2_neigh *l
     json_end_array(session);
   }
 
-  _print_json_string(session, "last_seen",
+  _print_json_number(session, "last_seen",
     oonf_clock_toIntervalString(&ibuf,
       -oonf_clock_get_relative(oonf_layer2_neigh_get_lastseen(l2neigh))));
 
@@ -1126,7 +1126,7 @@ _print_link_network(struct json_session *session, struct oonf_layer2_net *l2net)
     json_end_array(session);
   }
   _print_json_bool(session, "dlep", l2net->if_dlep);
-  _print_json_string(session, "last_seen",
+  _print_json_number(session, "last_seen",
       oonf_clock_toIntervalString(&ibuf, -oonf_clock_get_relative(l2net->last_seen)));
 
   if (!avl_is_empty(&l2net->local_peer_ips)) {
