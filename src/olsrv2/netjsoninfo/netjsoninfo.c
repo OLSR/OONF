@@ -922,32 +922,8 @@ _create_domain_json(struct json_session *session) {
 }
 
 static void
-_create_local_attached_ids(struct json_session *session,
-                           const struct netaddr *originator) {
-  struct olsrv2_lan_entry *lan;
-  struct _node_id_str node_id_str;
-  int af;
-
-  af = netaddr_get_address_family(originator);
-  avl_for_each_element(olsrv2_lan_get_tree(), lan, _node) {
-    if (netaddr_get_address_family(&lan->prefix.dst) == af) {
-      json_start_object(session, NULL);
-      _print_json_string(session, "id", _get_tc_lan_id(&node_id_str, lan));
-      json_start_object(session, "prefix");
-      _print_json_netaddr(session, "destination", &lan->prefix.dst);
-      if (netaddr_get_prefix_length(&lan->prefix.src) > 0) {
-        _print_json_netaddr(session, "source", &lan->prefix.src);
-      }
-      json_end_object(session);
-      json_end_object(session);
-    }
-  }
-}
-
-static void
 _create_id_json(struct json_session *session) {
   struct olsrv2_tc_node *tc_node;
-  struct olsrv2_tc_attachment *tc_attached;
   struct _node_id_str node_id_str;
 
   json_start_object(session, NULL);
@@ -957,37 +933,16 @@ _create_id_json(struct json_session *session) {
   _print_json_string(session, "version", oonf_log_get_libdata()->version);
   _print_json_string(session, "revision", oonf_log_get_libdata()->git_commit);
 
-  json_start_array(session, "routers");
+  json_start_array(session, "nodes");
 
   avl_for_each_element(olsrv2_tc_get_tree(), tc_node, _originator_node) {
     json_start_object(session, NULL);
-    _print_json_string(session, "id", _get_tc_node_id(&node_id_str, tc_node));
+    _print_json_string(session, "netjson_id", _get_tc_node_id(&node_id_str, tc_node));
 
     json_start_array(session, "addresses");
     _print_json_netaddr(session, NULL, &tc_node->target.prefix.dst);
     json_end_array(session);
 
-    json_start_array(session, "attached_prefixes");
-
-    /* locally attached */
-    if (olsrv2_originator_is_local(&tc_node->target.prefix.dst)) {
-      _create_local_attached_ids(session, &tc_node->target.prefix.dst);
-    }
-    /* remote attached prefix*/
-    avl_for_each_element(&tc_node->_attached_networks, tc_attached, _src_node) {
-      json_start_object(session, NULL);
-      _print_json_string(session, "id", _get_tc_endpoint_id(&node_id_str, tc_attached));
-      json_start_array(session, "prefixes");
-      json_start_object(session, NULL);
-      _print_json_netaddr(session, "destination", &tc_attached->dst->target.prefix.dst);
-      if (netaddr_get_prefix_length(&tc_attached->dst->target.prefix.src) > 0) {
-        _print_json_netaddr(session, "source", &tc_attached->dst->target.prefix.src);
-      }
-      json_end_object(session);
-      json_end_array(session);
-      json_end_object(session);
-    }
-    json_end_array(session);
     json_end_object(session);
   }
   json_end_array(session);
@@ -1076,7 +1031,7 @@ _print_rf_band(struct json_session *session, int64_t f, int64_t b, const char *m
       _print_json_integer(session, "center", f);
     }
     if (b > 0) {
-      _print_json_integer(session, "badnwidth", b);
+      _print_json_integer(session, "bandwidth", b);
     }
     if (mode) {
       _print_json_string(session, "mode", mode);
