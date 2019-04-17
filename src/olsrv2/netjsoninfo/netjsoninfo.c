@@ -926,17 +926,14 @@ _create_id_json(struct json_session *session) {
   struct olsrv2_tc_node *tc_node;
   struct _node_id_str node_id_str;
 
-  json_start_object(session, NULL);
-
-  _print_json_string(session, "type", "NetworkId");
-  _print_json_string(session, "protocol", "olsrv2");
-  _print_json_string(session, "version", oonf_log_get_libdata()->version);
-  _print_json_string(session, "revision", oonf_log_get_libdata()->git_commit);
-
-  json_start_array(session, "nodes");
-
   avl_for_each_element(olsrv2_tc_get_tree(), tc_node, _originator_node) {
     json_start_object(session, NULL);
+
+    _print_json_string(session, "type", "NetworkId");
+    _print_json_string(session, "protocol", "olsrv2");
+    _print_json_string(session, "version", oonf_log_get_libdata()->version);
+    _print_json_string(session, "revision", oonf_log_get_libdata()->git_commit);
+
     _print_json_string(session, "netjson_id", _get_tc_node_id(&node_id_str, tc_node));
 
     json_start_array(session, "addresses");
@@ -945,8 +942,6 @@ _create_id_json(struct json_session *session) {
 
     json_end_object(session);
   }
-  json_end_array(session);
-  json_end_object(session);
 }
 
 static void
