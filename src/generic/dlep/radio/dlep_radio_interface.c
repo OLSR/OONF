@@ -81,13 +81,13 @@ static struct oonf_class _interface_class = {
 static bool _shutting_down;
 
 static struct oonf_layer2_origin _l2_origin = {
-  .name = "dlep radio",
+  .name = "dlep_radio",
   .proactive = true,
   .priority = OONF_LAYER2_ORIGIN_RELIABLE,
 };
 
 static struct oonf_layer2_origin _l2_default_origin = {
-  .name = "dlep radio defaults",
+  .name = "dlep_radio_defaults",
   .proactive = false,
   .priority = OONF_LAYER2_ORIGIN_DEFAULT,
 };

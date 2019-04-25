@@ -46,6 +46,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              systeminfo
                              dlep_router
                              layer2_export
+                             http
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

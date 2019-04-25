@@ -90,13 +90,13 @@ static struct oonf_class _router_if_class = {
 static bool _shutting_down;
 
 static struct oonf_layer2_origin _l2_origin = {
-  .name = "dlep router",
+  .name = "dlep_router",
   .proactive = true,
   .priority = OONF_LAYER2_ORIGIN_RELIABLE,
 };
 
 static struct oonf_layer2_origin _l2_default_origin = {
-  .name = "dlep router defaults",
+  .name = "dlep_router_defaults",
   .proactive = false,
   .priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
 };

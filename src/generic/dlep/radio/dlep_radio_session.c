@@ -218,9 +218,14 @@ _cb_send_buffer(struct dlep_session *session, int af_family __attribute((unused)
 static void
 _cb_end_session(struct dlep_session *session) {
   struct dlep_radio_session *radio_session;
+#ifdef OONF_LOG_DEBUG_INFO
+  struct netaddr_str nbuf;
+#endif
 
   /* get pointer to radio interface */
   radio_session = container_of(session, struct dlep_radio_session, session);
 
+  OONF_DEBUG(session->log_source, "Ending session to %s",
+             netaddr_socket_to_string(&nbuf, &radio_session->stream.remote_socket));
   dlep_radio_remove_session(radio_session);
 }
