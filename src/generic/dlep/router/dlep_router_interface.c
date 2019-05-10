@@ -73,6 +73,7 @@
 #include <oonf/generic/dlep/ext_l2_statistics/l2_statistics.h>
 #include <oonf/generic/dlep/ext_radio_attributes/radio_attributes.h>
 #include <oonf/generic/dlep/ext_lid/lid.h>
+#include <oonf/generic/dlep/ext_dns/dns.h>
 #include <oonf/generic/dlep/router/dlep_router_internal.h>
 #include <oonf/generic/dlep/router/dlep_router_session.h>
 
@@ -89,6 +90,7 @@ static struct oonf_class _router_if_class = {
 
 static bool _shutting_down;
 
+#if 0
 static struct oonf_layer2_origin _l2_origin = {
   .name = "dlep_router",
   .proactive = true,
@@ -100,6 +102,7 @@ static struct oonf_layer2_origin _l2_default_origin = {
   .proactive = false,
   .priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
 };
+#endif
 
 static struct oonf_timer_class _connect_to_watchdog_class = {
   .name = "connect_to watchdog",
@@ -125,10 +128,15 @@ dlep_router_interface_init(void) {
   dlep_l2_statistics_init();
   dlep_radio_attributes_init();
   dlep_lid_init();
+  dlep_dns_init();
 
   _shutting_down = false;
 
+#if 0
   oonf_layer2_origin_add(&_l2_origin);
+  oonf_layer2_origin_add(&_l2_default_origin);
+#endif
+
   oonf_timer_add(&_connect_to_watchdog_class);
 }
 
@@ -149,7 +157,10 @@ dlep_router_interface_cleanup(void) {
   dlep_base_ip_cleanup();
   dlep_router_session_cleanup();
   dlep_extension_cleanup();
+#if 0
   oonf_layer2_origin_remove(&_l2_origin);
+  oonf_layer2_origin_remove(&_l2_default_origin);
+#endif
   oonf_timer_remove(&_connect_to_watchdog_class);
 }
 
@@ -190,6 +201,7 @@ dlep_router_get_by_datapath_if(const char *ifname) {
 struct dlep_router_if *
 dlep_router_add_interface(const char *ifname) {
   struct dlep_router_if *interface;
+  char buffer[64];
 
   interface = dlep_router_get_by_layer2_if(ifname);
   if (interface) {
@@ -202,7 +214,20 @@ dlep_router_add_interface(const char *ifname) {
     return NULL;
   }
 
-  if (dlep_if_add(&interface->interf, ifname, &_l2_origin, &_l2_default_origin, _connect_to_if_changed, LOG_DLEP_ROUTER, false)) {
+  snprintf(buffer, sizeof(buffer), "dlep_rt_%s", ifname);
+  interface->l2_origin.name = strdup(buffer);
+  interface->l2_origin.priority = OONF_LAYER2_ORIGIN_RELIABLE,
+  interface->l2_origin.proactive = true;
+  oonf_layer2_origin_add(&interface->l2_origin);
+
+  snprintf(buffer, sizeof(buffer), "dlep_rtd_%s", ifname);
+  interface->l2_default_origin.name = strdup(buffer);
+  interface->l2_default_origin.priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
+  interface->l2_default_origin.proactive = false;
+  oonf_layer2_origin_add(&interface->l2_origin);
+
+  if (dlep_if_add(&interface->interf, ifname, &interface->l2_origin,
+      &interface->l2_default_origin, _connect_to_if_changed, LOG_DLEP_ROUTER, false)) {
     oonf_class_free(&_router_if_class, interface);
     return NULL;
   }

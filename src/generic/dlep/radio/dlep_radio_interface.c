@@ -67,6 +67,7 @@
 #include <oonf/generic/dlep/ext_l2_statistics/l2_statistics.h>
 #include <oonf/generic/dlep/ext_radio_attributes/radio_attributes.h>
 #include <oonf/generic/dlep/ext_lid/lid.h>
+#include <oonf/generic/dlep/ext_dns/dns.h>
 #include <oonf/generic/dlep/radio/dlep_radio_internal.h>
 #include <oonf/generic/dlep/radio/dlep_radio_session.h>
 
@@ -80,6 +81,7 @@ static struct oonf_class _interface_class = {
 
 static bool _shutting_down;
 
+#if 0
 static struct oonf_layer2_origin _l2_origin = {
   .name = "dlep_radio",
   .proactive = true,
@@ -91,6 +93,7 @@ static struct oonf_layer2_origin _l2_default_origin = {
   .proactive = false,
   .priority = OONF_LAYER2_ORIGIN_DEFAULT,
 };
+#endif
 
 /**
  * Initialize everything for dlep radio interfaces. This function also
@@ -111,7 +114,11 @@ dlep_radio_interface_init(void) {
   dlep_l2_statistics_init();
   dlep_radio_attributes_init();
   dlep_lid_init();
-
+  dlep_dns_init();
+#if 0
+  oonf_layer2_origin_add(&_l2_origin);
+  oonf_layer2_origin_add(&_l2_default_origin);
+#endif
   _shutting_down = false;
   return 0;
 }
@@ -131,6 +138,10 @@ dlep_radio_interface_cleanup(void) {
   oonf_class_remove(&_interface_class);
   dlep_radio_session_cleanup();
   dlep_extension_cleanup();
+#if 0
+  oonf_layer2_origin_remove(&_l2_origin);
+  oonf_layer2_origin_remove(&_l2_default_origin);
+#endif
 }
 
 /**
@@ -171,6 +182,7 @@ dlep_radio_get_by_datapath_if(const char *ifname) {
 struct dlep_radio_if *
 dlep_radio_add_interface(const char *ifname) {
   struct dlep_radio_if *interface;
+  char buffer[64];
 
   interface = dlep_radio_get_by_layer2_if(ifname);
   if (interface) {
@@ -182,7 +194,21 @@ dlep_radio_add_interface(const char *ifname) {
     return NULL;
   }
 
-  if (dlep_if_add(&interface->interf, ifname, &_l2_origin, &_l2_default_origin, NULL, LOG_DLEP_RADIO, true)) {
+  snprintf(buffer, sizeof(buffer), "dlep_ra_%s", ifname);
+  interface->l2_origin.name = strdup(buffer);
+  interface->l2_origin.priority = OONF_LAYER2_ORIGIN_RELIABLE,
+  interface->l2_origin.proactive = true;
+  oonf_layer2_origin_add(&interface->l2_origin);
+
+  snprintf(buffer, sizeof(buffer), "dlep_rad_%s", ifname);
+  interface->l2_default_origin.name = strdup(buffer);
+  interface->l2_default_origin.priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
+  interface->l2_default_origin.proactive = false;
+  oonf_layer2_origin_add(&interface->l2_origin);
+
+
+  if (dlep_if_add(&interface->interf, ifname, &interface->l2_origin,
+      &interface->l2_default_origin, NULL, LOG_DLEP_RADIO, true)) {
     oonf_class_free(&_interface_class, interface);
     return NULL;
   }

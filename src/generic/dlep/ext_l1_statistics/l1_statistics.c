@@ -187,8 +187,6 @@ static struct dlep_network_mapping _net_mappings[] = {
     .length = 8,
     .scaling = 1,
 
-    .mandatory = true,
-
     .from_tlv = _reader_map_frequency,
     .to_tlv = _writer_map_frequency,
   },
@@ -197,8 +195,6 @@ static struct dlep_network_mapping _net_mappings[] = {
     .layer2 = OONF_LAYER2_NET_BANDWIDTH_1,
     .length = 8,
     .scaling = 1,
-
-    .mandatory = true,
 
     .from_tlv = _reader_map_bandwidth,
     .to_tlv = _writer_map_bandwidth,

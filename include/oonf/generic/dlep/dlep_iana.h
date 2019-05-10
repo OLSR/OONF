@@ -105,8 +105,11 @@ enum dlep_extensions
   /*! DLEP Link ID */
   DLEP_EXTENSION_LINK_ID = 65523,
 
+  /*! DNS server exchange */
+  DLEP_EXTENSION_DNS = 65524,
+
   /*! number of supported (non-base) DLEP extensions */
-  DLEP_EXTENSION_COUNT = 4,
+  DLEP_EXTENSION_COUNT = 5,
 };
 
 /**
@@ -322,16 +325,23 @@ enum dlep_tlvs
 
   /*! rx broadcast bitrate */
   DLEP_CDRR_BC_TLV,
+
+  /* ipv4 DNS service */
+  DLEP_IPV4_DNS_SERVER_TLV,
+
+  /* ipv6 DNS service */
+  DLEP_IPV6_DNS_SERVER_TLV,
 };
 
 enum dlep_peer_type_flags
 {
-  /*! radio does not implement access control */
+  /*! service does not implement access control, just use TCP */
   DLEP_PEER_TYPE_OPEN = 0,
 
-  /*! radio does implement access control */
+  /*! service does implement TLS access control */
   DLEP_PEER_TYPE_SECURED = 1,
 };
+
 /**
  * Flags for IP address TLVs
  */

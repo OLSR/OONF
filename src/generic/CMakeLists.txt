@@ -1,6 +1,8 @@
 # add subdirectories
 add_subdirectory(cfg_compact)
 add_subdirectory(dlep)
+add_subdirectory(dns_query)
+add_subdirectory(dns_sd)
 add_subdirectory(example)
 add_subdirectory(layer2info)
 add_subdirectory(layer2_import)

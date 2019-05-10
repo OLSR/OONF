@@ -34,6 +34,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              socket
                              stream_socket
                              telnet
+                             http
                              timer
                              viewer
                              os_clock
@@ -44,9 +45,12 @@ IF (NOT OONF_STATIC_PLUGINS)
                              cfg_compact
                              layer2info
                              systeminfo
-                             dlep_router
+                             remotecontrol
+                             layer2_config
                              layer2_export
-                             http
+                             dns_query
+                             dns_sd
+                             dlep_router
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

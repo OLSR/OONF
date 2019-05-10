@@ -359,6 +359,18 @@ oonf_rfc5444_is_target_active(struct oonf_rfc5444_target *target) {
          oonf_packet_managed_is_active(&target->interface->_socket, netaddr_get_address_family(&target->dst));
 }
 
+static INLINE bool
+oonf_rfc5444_is_interface_routing(struct oonf_rfc5444_interface *interface) {
+  return !interface->_socket.config.dont_route;
+}
+
+static INLINE void
+oonf_rfc5444_set_interface_routing(struct oonf_rfc5444_interface *interface, bool route) {
+  if (oonf_rfc5444_is_interface_routing(interface) != route) {
+    interface->_socket.config.dont_route = !route;
+    oonf_rfc5444_reconfigure_interface(interface, NULL);
+  }
+}
 /**
  * Request a protocol wide packet sequence number
  * @param protocol pointer to rfc5444 protocol instance

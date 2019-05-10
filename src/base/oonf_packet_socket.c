@@ -676,9 +676,10 @@ _apply_managed_socket(struct oonf_packet_managed *managed, struct oonf_packet_so
   }
 
   if (list_is_node_added(&packet->node)) {
-    if (data == packet->os_if && memcmp(&sock, &packet->local_socket, sizeof(sock)) == 0 &&
-        protocol == packet->protocol) {
-      /* nothing changed */
+    if (data == packet->os_if && memcmp(&sock, &packet->local_socket, sizeof(sock)) == 0
+      && protocol == packet->protocol) {
+      /* nothing changed, just copy config again */
+      memcpy(&packet->config, &managed->config, sizeof(packet->config));
       return 1;
     }
   }

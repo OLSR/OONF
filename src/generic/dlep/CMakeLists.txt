@@ -14,6 +14,7 @@ SET (common_source      ext_base_metric/metric.c
                         ext_l2_statistics/l2_statistics.c
                         ext_radio_attributes/radio_attributes.c
                         ext_lid/lid.c
+                        ext_dns/dns.c
                         dlep_extension.c
                         dlep_interface.c
                         dlep_session.c
@@ -28,7 +29,7 @@ SET (radio_include      radio/dlep_radio.h)
 # sources/includes for dlep_router
 SET (router_source      ${common_source}
                         ${router_only_source})
-SET (router_include router/dlep_router.h)
+SET (router_include     router/dlep_router.h)
 
 # sources/includes for dlep_proxy
 SET (proxy_source       ${common_source}

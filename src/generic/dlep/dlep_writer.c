@@ -313,6 +313,64 @@ dlep_writer_add_ipv6_conpoint_tlv(struct dlep_writer *writer, const struct netad
 }
 
 /**
+ * Write a DLEP IPv4 conpoint TLV
+ * @param writer dlep writer
+ * @param addr IPv4 address
+ * @param port port number
+ */
+void
+dlep_writer_add_ipv4_dns_tlv(struct dlep_writer *writer, const union netaddr_socket *sock) {
+  struct netaddr ip;
+  uint16_t port;
+  uint8_t value[6];
+
+  netaddr_from_socket(&ip, sock);
+  port = netaddr_socket_get_port(sock);
+
+  if (netaddr_get_address_family(&ip) != AF_INET) {
+    return;
+  }
+
+  /* convert port to network byte order */
+  port = htons(port);
+
+  /* copy data into value buffer */
+  netaddr_to_binary(&value[0], &ip, sizeof(value));
+  memcpy(&value[4], &port, sizeof(port));
+
+  dlep_writer_add_tlv(writer, DLEP_IPV4_DNS_SERVER_TLV, &value, sizeof(value));
+}
+
+/**
+ * Write a DLEP IPv6 conpoint TLV
+ * @param writer dlep writer
+ * @param addr IPv6 address
+ * @param port port number
+ */
+void
+dlep_writer_add_ipv6_dns_tlv(struct dlep_writer *writer, const union netaddr_socket *sock) {
+  struct netaddr ip;
+  uint16_t port;
+  uint8_t value[18];
+
+  netaddr_from_socket(&ip, sock);
+  port = netaddr_socket_get_port(sock);
+
+  if (netaddr_get_address_family(&ip) != AF_INET6) {
+    return;
+  }
+
+  /* convert port to network byte order */
+  port = htons(port);
+
+  /* copy data into value buffer */
+  netaddr_to_binary(&value[0], &ip, sizeof(value));
+  memcpy(&value[16], &port, sizeof(port));
+
+  dlep_writer_add_tlv(writer, DLEP_IPV6_DNS_SERVER_TLV, &value, sizeof(value));
+}
+
+/**
  * Add a DLEP tlv with uint64 value
  * @param writer dlep writer
  * @param number value
@@ -376,15 +434,15 @@ dlep_writer_add_supported_extensions(struct dlep_writer *writer, const uint16_t 
 }
 
 /**
- * Write a layer2 data object into a DLEP TLV
+ * Write a layer2 number object into a DLEP TLV
  * @param writer dlep writer
  * @param data layer2 data
  * @param tlv tlv id
  * @param length tlv value length (1,2,4 or 8 bytes)
  * @return -1 if an error happened, 0 otherwise
  */
-int
-dlep_writer_map_identity(struct dlep_writer *writer, struct oonf_layer2_data *data,
+static int
+_map_number(struct dlep_writer *writer, struct oonf_layer2_data *data,
   const struct oonf_layer2_metadata *meta, uint16_t tlv, uint16_t length, uint64_t scaling) {
   int64_t l2value64;
   uint64_t tmp64;
@@ -393,24 +451,11 @@ dlep_writer_map_identity(struct dlep_writer *writer, struct oonf_layer2_data *da
   uint8_t tmp8;
   void *value;
 
-  if (!oonf_layer2_data_has_value(data)) {
-    /* no data available */
-    return 0;
+  if (meta->type == OONF_LAYER2_INTEGER_DATA) {
+    l2value64 = oonf_layer2_data_get_int64(data, scaling, 0);
   }
-  if (meta->type != oonf_layer2_data_get_type(data)) {
-    /* bad data type */
-    return -1;
-  }
-
-  switch (oonf_layer2_data_get_type(data)) {
-    case OONF_LAYER2_INTEGER_DATA:
-      l2value64 = oonf_layer2_data_get_int64(data, scaling, 0);
-      break;
-    case OONF_LAYER2_BOOLEAN_DATA:
-      l2value64 = oonf_layer2_data_get_boolean(data, false) ? 1 : 0;
-      break;
-    default:
-      return -1;
+  else {
+    l2value64 = oonf_layer2_data_get_boolean(data, false) ? 1 : 0;
   }
 
   switch (length) {
@@ -439,6 +484,86 @@ dlep_writer_map_identity(struct dlep_writer *writer, struct oonf_layer2_data *da
 }
 
 /**
+ * Write a layer2 network object into a DLEP TLV
+ * @param writer dlep writer
+ * @param data layer2 data
+ * @param tlv tlv id
+ * @param length tlv value length (4, 6, 16 or 18 bytes)
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_map_network(struct dlep_writer *writer, struct oonf_layer2_data *data,
+  const struct oonf_layer2_metadata *meta, uint16_t tlv, uint16_t length) {
+  const union netaddr_socket *sock;
+  const struct netaddr *addr;
+  const uint8_t *addr_bin;
+  uint8_t buffer[18];
+  uint16_t port;
+  size_t addr_len;
+
+  /* extract address (and port for sockets) */
+  if (meta->type == OONF_LAYER2_NETWORK_DATA) {
+    addr = oonf_layer2_data_get_netaddr(data);
+    addr_bin = netaddr_get_binptr(addr);
+    addr_len = netaddr_get_binlength(addr);
+  }
+  else {
+    sock = oonf_layer2_data_get_socket(data);
+    addr_bin = netaddr_socket_get_addr_binptr(sock);
+    addr_len = netaddr_socket_get_addr_binlength(sock);
+    port = netaddr_socket_get_port(sock);
+  }
+
+  if (addr_len == 0) {
+    /* unspecified address, don't produce TLV */
+    return 0;
+  }
+
+  /* check address length */
+  if (addr_len + (meta->type == OONF_LAYER2_SOCKET_DATA ? 2 : 0) != length) {
+    return -1;
+  }
+
+  memcpy(buffer, addr_bin, addr_len);
+  if (meta->type == OONF_LAYER2_SOCKET_DATA) {
+    port = htons(port);
+    memcpy(&buffer[addr_len], &port, sizeof(port));
+  }
+
+  dlep_writer_add_tlv(writer, tlv, buffer, length);
+  return 0;
+}
+
+/**
+ * Write a layer2 data object into a DLEP TLV
+ * @param writer dlep writer
+ * @param data layer2 data
+ * @param tlv tlv id
+ * @param length tlv value length (1,2,4 or 8 bytes)
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+dlep_writer_map_identity(struct dlep_writer *writer, struct oonf_layer2_data *data,
+  const struct oonf_layer2_metadata *meta, uint16_t tlv, uint16_t length, uint64_t scaling) {
+  if (!oonf_layer2_data_has_value(data)) {
+    /* no data available */
+    return 0;
+  }
+  if (meta->type != oonf_layer2_data_get_type(data)) {
+    /* bad data type */
+    return -1;
+  }
+
+  if (meta->type == OONF_LAYER2_INTEGER_DATA || meta->type == OONF_LAYER2_BOOLEAN_DATA) {
+    return _map_number(writer, data, meta, tlv, length, scaling);
+  }
+  if (meta->type == OONF_LAYER2_NETWORK_DATA || meta->type == OONF_LAYER2_SOCKET_DATA) {
+    return _map_network(writer, data, meta, tlv, length);
+  }
+  return -1;
+}
+
+/**
  * Automatically map all predefined metric values of an
  * extension for layer2 neighbor data from the layer2
  * database to DLEP TLVs
@@ -464,7 +589,8 @@ dlep_writer_map_l2neigh_data(
       ptr = &def[map->layer2];
     }
 
-    if (map->to_tlv(writer, ptr, oonf_layer2_neigh_metadata_get(map->layer2), map->dlep, map->length, map->scaling)) {
+    if (map->to_tlv(writer, ptr, oonf_layer2_neigh_metadata_get(map->layer2),
+        map->dlep, map->length, map->scaling)) {
       return -(i + 1);
     }
   }
@@ -483,13 +609,19 @@ dlep_writer_map_l2neigh_data(
  */
 int
 dlep_writer_map_l2net_data(struct dlep_writer *writer, struct dlep_extension *ext, struct oonf_layer2_data *data) {
+  enum oonf_layer2_network_index l2net_idx;
   struct dlep_network_mapping *map;
   size_t i;
 
   for (i = 0; i < ext->if_mapping_count; i++) {
     map = &ext->if_mapping[i];
 
-    if (map->to_tlv(writer, &data[map->layer2], oonf_layer2_net_metadata_get(map->layer2), map->dlep, map->length, map->scaling)) {
+    l2net_idx = map->layer2_dst;
+    if (l2net_idx == 0) {
+      l2net_idx = map->layer2;
+    }
+    if (map->to_tlv(writer, &data[map->layer2], oonf_layer2_net_metadata_get(l2net_idx),
+        map->dlep, map->length, map->scaling)) {
       return -(i + 1);
     }
   }

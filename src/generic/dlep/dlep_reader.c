@@ -386,6 +386,88 @@ dlep_reader_ipv6_conpoint_tlv(
 }
 
 /**
+ * Parse a DLEP IPv4 DNS TLV
+ * @param addr pointer to address storage
+ * @param port pointer to port storage
+ * @param tls pointer to storage for TLV flag
+ * @param session dlep session
+ * @param value dlep value to parse, NULL for using the first
+ *   DLEP_IPv4_DNS_SERVER_TLV value
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+dlep_reader_ipv4_dns_tlv(
+  union netaddr_socket *sock, struct dlep_session *session, struct dlep_parser_value *value) {
+  struct netaddr addr;
+  uint16_t tmp;
+  const uint8_t *ptr;
+
+  if (!value) {
+    value = dlep_session_get_tlv_value(session, DLEP_IPV4_DNS_SERVER_TLV);
+    if (!value) {
+      return -1;
+    }
+  }
+
+  if (value->length != 6) {
+    return -1;
+  }
+
+  ptr = dlep_session_get_tlv_binary(session, value);
+
+  /* handle port */
+  memcpy(&tmp, &ptr[4], sizeof(tmp));
+  tmp = ntohs(tmp);
+
+  if (netaddr_from_binary(&addr, &ptr[0], 4, AF_INET)) {
+    return -1;
+  }
+
+  return netaddr_socket_init(sock, &addr, tmp, session->l2_listener.data->_addr_initialized);
+}
+
+/**
+ * Parse a DLEP IPv6 DNS TLV
+ * @param addr pointer to address storage
+ * @param port pointer to port storage
+ * @param tls pointer to storage for TLV flag
+ * @param session dlep session
+ * @param value dlep value to parse, NULL for using the first
+ *   DLEP_IPv6_DNS_SERVER_TLV value
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+dlep_reader_ipv6_dns_tlv(
+  union netaddr_socket *sock, struct dlep_session *session, struct dlep_parser_value *value) {
+  struct netaddr addr;
+  uint16_t tmp;
+  const uint8_t *ptr;
+
+  if (!value) {
+    value = dlep_session_get_tlv_value(session, DLEP_IPV6_DNS_SERVER_TLV);
+    if (!value) {
+      return -1;
+    }
+  }
+
+  if (value->length != 18) {
+    return -1;
+  }
+
+  ptr = dlep_session_get_tlv_binary(session, value);
+
+  /* handle port */
+  memcpy(&tmp, &ptr[16], sizeof(tmp));
+  tmp = ntohs(tmp);
+
+  if (netaddr_from_binary(&addr, &ptr[0], 4, AF_INET)) {
+    return -1;
+  }
+
+  return netaddr_socket_init(sock, &addr, tmp, session->l2_listener.data->_addr_initialized);
+}
+
+/**
  * Parse a generic uint64 value TLV
  * @param number storage for uint64 value
  * @param tlv_id tlv_id to parse
@@ -500,11 +582,17 @@ dlep_reader_map_identity(struct oonf_layer2_data *data, const struct oonf_layer2
   uint16_t tmp16;
   uint8_t tmp8;
   const uint8_t *dlepvalue;
+  struct netaddr addr;
+  union netaddr_socket sock;
 
   value = dlep_session_get_tlv_value(session, dlep_tlv);
-  if (value) {
-    dlepvalue = dlep_parser_get_tlv_binary(&session->parser, value);
+  if (!value) {
+    return 0;
+  }
 
+  dlepvalue = dlep_parser_get_tlv_binary(&session->parser, value);
+
+  if (meta->type == OONF_LAYER2_INTEGER_DATA || meta->type == OONF_LAYER2_BOOLEAN_DATA) {
     switch (value->length) {
       case 8:
         memcpy(&tmp64, dlepvalue, 8);
@@ -525,17 +613,31 @@ dlep_reader_map_identity(struct oonf_layer2_data *data, const struct oonf_layer2
       default:
         return -1;
     }
+  }
 
-    switch (meta->type) {
-      case OONF_LAYER2_INTEGER_DATA:
-        oonf_layer2_data_set_int64(data, session->l2_origin, meta, l2value, scaling);
-        break;
-      case OONF_LAYER2_BOOLEAN_DATA:
-        oonf_layer2_data_set_bool(data, session->l2_origin, meta, l2value != 0);
-        break;
-      default:
-        return -1;
-    }
+  switch (meta->type) {
+    case OONF_LAYER2_INTEGER_DATA:
+      oonf_layer2_data_set_int64(data, session->l2_origin, meta, l2value, scaling);
+      break;
+    case OONF_LAYER2_BOOLEAN_DATA:
+      oonf_layer2_data_set_bool(data, session->l2_origin, meta, l2value != 0);
+      break;
+    case OONF_LAYER2_NETWORK_DATA:
+      netaddr_from_binary(&addr, dlepvalue, value->length, 0);
+      oonf_layer2_data_set_netaddr(data, session->l2_origin, meta, &addr);
+      break;
+    case OONF_LAYER2_SOCKET_DATA:
+      netaddr_socket_invalidate(&sock);
+      if (value->length == 6 || value->length == 18) {
+        netaddr_from_binary(&addr, dlepvalue, value->length-2, 0);
+        memcpy(&tmp16, &dlepvalue[value->length-2], 2);
+
+        netaddr_socket_init(&sock, &addr, ntohs(tmp16), session->l2_listener.data->index);
+      }
+      oonf_layer2_data_set_socket(data, session->l2_origin, meta, &sock);
+      break;
+    default:
+      return -1;
   }
   return 0;
 }
@@ -554,12 +656,18 @@ int
 dlep_reader_map_l2neigh_data(struct oonf_layer2_data *data, struct dlep_session *session,
     struct dlep_extension *ext) {
   struct dlep_neighbor_mapping *map;
+  enum oonf_layer2_neighbor_index l2neigh_idx;
+
   size_t i;
 
   for (i = 0; i < ext->neigh_mapping_count; i++) {
     map = &ext->neigh_mapping[i];
 
-    if (map->from_tlv(&data[map->layer2], oonf_layer2_neigh_metadata_get(map->layer2), session,
+    l2neigh_idx = map->layer2_dst;
+    if (l2neigh_idx == 0) {
+      l2neigh_idx = map->layer2;
+    }
+    if (map->from_tlv(&data[l2neigh_idx], oonf_layer2_neigh_metadata_get(l2neigh_idx), session,
         map->dlep, map->scaling)) {
       return -(i + 1);
     }
@@ -580,12 +688,17 @@ dlep_reader_map_l2neigh_data(struct oonf_layer2_data *data, struct dlep_session 
 int
 dlep_reader_map_l2net_data(struct oonf_layer2_data *data, struct dlep_session *session, struct dlep_extension *ext) {
   struct dlep_network_mapping *map;
+  enum oonf_layer2_network_index l2net_idx;
   size_t i;
 
   for (i = 0; i < ext->if_mapping_count; i++) {
     map = &ext->if_mapping[i];
 
-    if (map->from_tlv(&data[map->layer2], oonf_layer2_net_metadata_get(map->layer2), session,
+    l2net_idx = map->layer2_dst;
+    if (l2net_idx == 0) {
+      l2net_idx = map->layer2;
+    }
+    if (map->from_tlv(&data[l2net_idx], oonf_layer2_net_metadata_get(l2net_idx), session,
         map->dlep, map->scaling)) {
       return -(i + 1);
     }

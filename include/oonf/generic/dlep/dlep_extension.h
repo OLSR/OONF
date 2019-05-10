@@ -177,6 +177,9 @@ struct dlep_neighbor_mapping {
   /*! layer2 neighbor id */
   enum oonf_layer2_neighbor_index layer2;
 
+  /*! layer2 neighbor id for DLEP to layer2 conversion (optional) */
+  enum oonf_layer2_neighbor_index layer2_dst;
+
   /*! TLV is mandatory */
   bool mandatory;
 
@@ -223,8 +226,11 @@ struct dlep_network_mapping {
   /* fixed integer arithmetics scaling factor */
   uint64_t scaling;
 
-  /*! layer2 network index */
+  /*! layer2 network id */
   enum oonf_layer2_network_index layer2;
+
+  /*! layer2 network id for DLEP to layer2 conversion (optional) */
+  enum oonf_layer2_network_index layer2_dst;
 
   /*! TLV is mandatory */
   bool mandatory;

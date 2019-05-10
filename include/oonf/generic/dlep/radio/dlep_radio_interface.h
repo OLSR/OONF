@@ -66,6 +66,12 @@ struct dlep_radio_if {
 
   /*! configuration of TCP socket */
   struct oonf_stream_managed_config tcp_config;
+
+  /* layer2 origin for this interface */
+  struct oonf_layer2_origin l2_origin;
+
+  /* layer2 origin for this interface default values*/
+  struct oonf_layer2_origin l2_default_origin;
 };
 
 int dlep_radio_interface_init(void);

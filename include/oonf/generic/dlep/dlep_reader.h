@@ -71,6 +71,10 @@ int dlep_reader_ipv4_conpoint_tlv(
   struct netaddr *addr, uint16_t *port, bool *tls, struct dlep_session *session, struct dlep_parser_value *value);
 int dlep_reader_ipv6_conpoint_tlv(
   struct netaddr *addr, uint16_t *port, bool *tls, struct dlep_session *session, struct dlep_parser_value *value);
+int dlep_reader_ipv4_dns_tlv(
+  union netaddr_socket *sock, struct dlep_session *session, struct dlep_parser_value *value);
+int dlep_reader_ipv6_dns_tlv(
+  union netaddr_socket *sock, struct dlep_session *session, struct dlep_parser_value *value);
 int dlep_reader_uint64(
   uint64_t *number, uint16_t tlv_id, struct dlep_session *session, struct dlep_parser_value *value);
 int dlep_reader_int64(int64_t *number, uint16_t tlv_id, struct dlep_session *session, struct dlep_parser_value *value);

@@ -43,52 +43,13 @@
  * @file
  */
 
-#ifndef DLEP_ROUTER_INTERFACE_H_
-#define DLEP_ROUTER_INTERFACE_H_
+#ifndef _DLEP_DNS_H_
+#define _DLEP_DNS_H_
 
 #include <oonf/oonf.h>
-#include <oonf/libcommon/netaddr.h>
-#include <oonf/base/oonf_layer2.h>
-#include <oonf/base/oonf_timer.h>
+#include <oonf/generic/dlep/dlep_extension.h>
 
-#include <oonf/generic/dlep/dlep_interface.h>
-#include <oonf/generic/dlep/dlep_session.h>
+struct dlep_extension *dlep_dns_init(void);
+void dlep_dns_cleanup(void);
 
-/**
- * DLEP router interface
- */
-struct dlep_router_if {
-  /*! generic DLEP interface */
-  struct dlep_if interf;
-
-  /* combined address/port we are directly connected to */
-  union netaddr_socket connect_to;
-
-  /*! IP address to directly connect router to */
-  struct netaddr connect_to_addr;
-
-  /*! TCP port to directly connect router to */
-  int32_t connect_to_port;
-
-  /* layer2 origin for this interface */
-  struct oonf_layer2_origin l2_origin;
-
-  /* layer2 origin for this interface default values*/
-  struct oonf_layer2_origin l2_default_origin;
-
-  /* timer to make sure we stay connected */
-  struct oonf_timer_instance _connect_to_watchdog;
-};
-
-void dlep_router_interface_init(void);
-void dlep_router_interface_cleanup(void);
-
-struct dlep_router_if *dlep_router_get_by_layer2_if(const char *ifname);
-struct dlep_router_if *dlep_router_get_by_datapath_if(const char *ifname);
-struct dlep_router_if *dlep_router_add_interface(const char *ifname);
-void dlep_router_remove_interface(struct dlep_router_if *);
-
-void dlep_router_apply_interface_settings(struct dlep_router_if *);
-void dlep_router_terminate_all_sessions(void);
-
-#endif /* DLEP_ROUTER_INTERFACE_H_ */
+#endif /* _DLEP_DNS_H_ */
