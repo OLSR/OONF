@@ -216,6 +216,7 @@ enum oonf_layer2_data_type
   OONF_LAYER2_INTEGER_DATA,
   OONF_LAYER2_BOOLEAN_DATA,
   OONF_LAYER2_NETWORK_DATA,
+  OONF_LAYER2_SOCKET_DATA,
 
   OONF_LAYER2_DATA_TYPE_COUNT,
 };
@@ -224,6 +225,14 @@ union oonf_layer2_value {
   int64_t integer;
   bool boolean;
   struct netaddr addr;
+  union netaddr_socket socket;
+};
+
+enum oonf_layer2_network_flags {
+  OONF_LAYER2_IPV4_DATA = 1<<0,
+  OONF_LAYER2_IPV6_DATA = 1<<1,
+  OONF_LAYER2_UNSPEC_DATA = 1<<2,
+  OONF_LAYER2_HOST_ONLY_DATA = 1<<3,
 };
 
 /**
@@ -241,6 +250,9 @@ struct oonf_layer2_metadata {
 
   /*! scaling factor for  */
   const uint64_t scaling;
+
+  /*! flags for network and socket datatype */
+  enum oonf_layer2_network_flags net_flags;
 };
 
 /**
@@ -329,6 +341,18 @@ enum oonf_layer2_network_index
    * false if reported frequencies can be used for both reception/transmission
    */
   OONF_LAYER2_NET_BAND_UP_DOWN,
+
+  /*! known local IPv4 DNS server */
+  OONF_LAYER2_NET_IPV4_LOCAL_DNS,
+
+  /*! known local IPv6 DNS server */
+  OONF_LAYER2_NET_IPV6_LOCAL_DNS,
+
+  /*! known remote IPv4 DNS server */
+  OONF_LAYER2_NET_IPV4_REMOTE_DNS,
+
+  /*! known remote IPv6 DNS server */
+  OONF_LAYER2_NET_IPV6_REMOTE_DNS,
 
   /*! number of layer2 network metrics */
   OONF_LAYER2_NET_COUNT,
@@ -467,6 +491,12 @@ struct oonf_layer2_net {
 
   /*! absolute timestamp when network has been active last */
   uint64_t last_seen;
+
+  /*!
+   * DNS delivered that can be used for this interface, e.g.
+   * for DNS service discovery
+   */
+  union netaddr_socket dns;
 
   /*! network wide layer 2 data */
   struct oonf_layer2_data data[OONF_LAYER2_NET_COUNT];
@@ -892,6 +922,64 @@ oonf_layer2_data_read_boolean(bool *buffer, const struct oonf_layer2_data *l2dat
   }
   *buffer = l2data->_value.boolean;
   return 0;
+}
+
+static INLINE bool
+oonf_layer2_data_netaddr_is_unspec(const struct oonf_layer2_data *l2data) {
+  return !l2data->_meta
+      || oonf_layer2_data_get_type(l2data) != OONF_LAYER2_NETWORK_DATA
+      || netaddr_is_unspec(&l2data->_value.addr);
+}
+
+/**
+ * @param l2data layer-2 data object
+ * @return pointer to netaddr object, NULL if not available
+ */
+static INLINE const struct netaddr *
+oonf_layer2_data_get_netaddr(const struct oonf_layer2_data *l2data) {
+  if (!l2data->_meta ||  oonf_layer2_data_get_type(l2data) != OONF_LAYER2_NETWORK_DATA) {
+    return NULL;
+  }
+  return &l2data->_value.addr;
+}
+
+static INLINE bool
+oonf_layer2_data_socket_is_unspec(const struct oonf_layer2_data *l2data) {
+  return !l2data->_meta
+      || oonf_layer2_data_get_type(l2data) != OONF_LAYER2_SOCKET_DATA
+      || netaddr_is_unspec(&l2data->_value.addr);
+}
+
+/**
+ * @param l2data layer-2 data object
+ * @return pointer to netaddr socket object, NULL if not available
+ */
+static INLINE const union netaddr_socket *
+oonf_layer2_data_get_socket(const struct oonf_layer2_data *l2data) {
+  if (!l2data->_meta ||  oonf_layer2_data_get_type(l2data) != OONF_LAYER2_SOCKET_DATA) {
+    return NULL;
+  }
+  return &l2data->_value.socket;
+}
+
+static INLINE bool
+oonf_layer2_data_set_netaddr(struct oonf_layer2_data *l2data, const struct oonf_layer2_origin *origin,
+    const struct oonf_layer2_metadata *meta, const struct netaddr *addr) {
+  const union oonf_layer2_value *value = (union oonf_layer2_value *)addr;
+  if (l2data->_meta != NULL && l2data->_meta != meta) {
+    return false;
+  }
+  return oonf_layer2_data_set(l2data, origin, meta, value);
+}
+
+static INLINE bool
+oonf_layer2_data_set_socket(struct oonf_layer2_data *l2data, const struct oonf_layer2_origin *origin,
+    const struct oonf_layer2_metadata *meta, const union netaddr_socket *sock) {
+  const union oonf_layer2_value *value = (union oonf_layer2_value *)sock;
+  if (l2data->_meta != NULL && l2data->_meta != meta) {
+    return false;
+  }
+  return oonf_layer2_data_set(l2data, origin, meta, value);
 }
 
 /**

@@ -133,6 +133,10 @@ static const struct oonf_layer2_metadata _metadata_net[OONF_LAYER2_NET_COUNT] = 
   [OONF_LAYER2_NET_TX_ONLY_UNICAST] = { .key = "tx_only_unicast", .type = OONF_LAYER2_BOOLEAN_DATA },
   [OONF_LAYER2_NET_RADIO_MULTIHOP] = { .key = "radio_multihop", .type = OONF_LAYER2_BOOLEAN_DATA },
   [OONF_LAYER2_NET_BAND_UP_DOWN] = { .key = "band_updown", .type = OONF_LAYER2_BOOLEAN_DATA },
+  [OONF_LAYER2_NET_IPV4_LOCAL_DNS] = { .key = "local_ipv4_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV4_DATA | OONF_LAYER2_UNSPEC_DATA },
+  [OONF_LAYER2_NET_IPV6_LOCAL_DNS] = { .key = "local_ipv6_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV6_DATA | OONF_LAYER2_UNSPEC_DATA },
+  [OONF_LAYER2_NET_IPV4_REMOTE_DNS] = { .key = "remote_ipv4_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV4_DATA | OONF_LAYER2_UNSPEC_DATA },
+  [OONF_LAYER2_NET_IPV6_REMOTE_DNS] = { .key = "remote_ipv6_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV6_DATA | OONF_LAYER2_UNSPEC_DATA },
 };
 
 static const char *_network_type[OONF_LAYER2_TYPE_COUNT] = {
@@ -155,6 +159,7 @@ static const char *_data_types[OONF_LAYER2_DATA_TYPE_COUNT] = {
   [OONF_LAYER2_INTEGER_DATA] = "integer",
   [OONF_LAYER2_BOOLEAN_DATA] = "boolean",
   [OONF_LAYER2_NETWORK_DATA] = "network",
+  [OONF_LAYER2_SOCKET_DATA]  = "socket",
 };
 
 /* infrastructure for l2net/l2neigh tree */
@@ -291,9 +296,49 @@ oonf_layer2_data_parse_string(
 
     case OONF_LAYER2_BOOLEAN_DATA:
       if (!cfg_is_bool(input)) {
-        return -1;
+        return -2;
       }
       value->boolean = cfg_get_bool(input);
+      return 0;
+
+    case OONF_LAYER2_NETWORK_DATA:
+      if (netaddr_from_string(&value->addr, input)) {
+        return -2;
+      }
+      if (netaddr_is_unspec(&value->addr)
+          && (meta->net_flags & OONF_LAYER2_UNSPEC_DATA) == 0) {
+        return -3;
+      }
+      if (netaddr_get_address_family(&value->addr) == AF_INET
+          && (meta->net_flags & OONF_LAYER2_IPV4_DATA) == 0) {
+        return -4;
+      }
+      if (netaddr_get_address_family(&value->addr) == AF_INET6
+          && (meta->net_flags & OONF_LAYER2_IPV6_DATA) == 0) {
+        return -5;
+      }
+      if (!netaddr_is_host(&value->addr)
+          && (meta->net_flags & OONF_LAYER2_HOST_ONLY_DATA) != 0) {
+        return -6;
+      }
+      return 0;
+
+    case OONF_LAYER2_SOCKET_DATA:
+      if (netaddr_socket_from_string(&value->socket, input)) {
+        return -2;
+      }
+      if (netaddr_socket_is_unspec(&value->socket)
+          && (meta->net_flags & OONF_LAYER2_UNSPEC_DATA) == 0) {
+        return -3;
+      }
+      if (netaddr_socket_get_addressfamily(&value->socket) == AF_INET
+          && (meta->net_flags & OONF_LAYER2_IPV4_DATA) == 0) {
+        return -4;
+      }
+      if (netaddr_socket_get_addressfamily(&value->socket) == AF_INET6
+          && (meta->net_flags & OONF_LAYER2_IPV6_DATA) == 0) {
+        return -5;
+      }
       return 0;
 
     default:
@@ -314,6 +359,7 @@ const char *
 oonf_layer2_data_to_string(
   char *buffer, size_t length, const struct oonf_layer2_data *data, const struct oonf_layer2_metadata *meta, bool raw) {
   struct isonumber_str iso_str;
+  struct netaddr_str nbuf;
 
   switch (meta->type) {
     case OONF_LAYER2_INTEGER_DATA:
@@ -324,6 +370,12 @@ oonf_layer2_data_to_string(
 
     case OONF_LAYER2_BOOLEAN_DATA:
       return strscpy(buffer, json_getbool(data->_value.boolean), length);
+
+    case OONF_LAYER2_NETWORK_DATA:
+      return strscpy(buffer, netaddr_to_string(&nbuf, &data->_value.addr), length);
+
+    case OONF_LAYER2_SOCKET_DATA:
+      return strscpy(buffer, netaddr_socket_to_string(&nbuf, &data->_value.socket), length);
 
     default:
       return NULL;
@@ -418,6 +470,9 @@ oonf_layer2_data_compare(const union oonf_layer2_value *left, const union oonf_l
       break;
     case OONF_LAYER2_NETWORK_DATA:
       result = memcmp(&left->addr, &right->addr, sizeof(left->addr));
+      break;
+    case OONF_LAYER2_SOCKET_DATA:
+      result = memcmp(&left->socket, &right->socket, sizeof(left->socket));
       break;
     default:
       return false;

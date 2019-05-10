@@ -96,6 +96,9 @@ enum
 /*! text name for IPv6 unique local prefix */
 #define NETADDR_STR_ULA "ula"
 
+/*! compile constant initializer for netaddr unspec socket */
+#define NETADDR_SOCKET_UNSPEC_INIT { .std = { .sa_family = AF_UNSPEC } }
+
 /**
  * Representation of an address including address type
  * At the moment we support AF_INET, AF_INET6 and AF_MAC48
@@ -177,6 +180,7 @@ EXPORT extern const struct netaddr NETADDR_MAC48_IPV6_MULTICAST;
 
 EXPORT extern const union netaddr_socket NETADDR_SOCKET_IPV4_ANY;
 EXPORT extern const union netaddr_socket NETADDR_SOCKET_IPV6_ANY;
+EXPORT extern const union netaddr_socket NETADDR_SOCKET_UNSPEC;
 
 EXPORT int netaddr_from_binary_prefix(
   struct netaddr *dst, const void *binary, size_t len, uint8_t addr_type, uint8_t prefix_len);
@@ -192,10 +196,12 @@ EXPORT void netaddr_truncate(struct netaddr *dst, const struct netaddr *src);
 
 EXPORT int netaddr_socket_init(
   union netaddr_socket *combined, const struct netaddr *addr, uint16_t port, unsigned if_index);
+EXPORT const uint8_t *netaddr_socket_get_addr_binptr(const union netaddr_socket *sock);
 EXPORT uint16_t netaddr_socket_get_port(const union netaddr_socket *sock);
 EXPORT const char *netaddr_to_prefixstring(struct netaddr_str *dst, const struct netaddr *src, bool forceprefix);
 EXPORT int netaddr_from_string(struct netaddr *, const char *) __attribute__((warn_unused_result));
 EXPORT const char *netaddr_socket_to_string(struct netaddr_str *, const union netaddr_socket *);
+EXPORT int netaddr_socket_from_string(union netaddr_socket *, const char *);
 
 EXPORT int netaddr_cmp_to_socket(const struct netaddr *, const union netaddr_socket *);
 EXPORT bool netaddr_isequal_binary(
@@ -440,6 +446,16 @@ netaddr_set_prefix_length(struct netaddr *n, uint8_t prefix_len) {
 static INLINE sa_family_t
 netaddr_socket_get_addressfamily(const union netaddr_socket *s) {
   return s->std.sa_family;
+}
+
+static INLINE size_t
+netaddr_socket_get_addr_binlength(const union netaddr_socket *sock) {
+  return netaddr_get_af_maxprefix(sock->std.sa_family) >> 3;
+}
+
+static INLINE unsigned
+netaddr_socket_get_scopex(const union netaddr_socket *sock) {
+  return netaddr_socket_get_addressfamily(sock) == AF_INET6 ? sock->v6.sin6_scope_id : 0;
 }
 
 #endif /* NETADDR_H_ */
