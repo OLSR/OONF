@@ -228,10 +228,20 @@ union oonf_layer2_value {
   union netaddr_socket socket;
 };
 
+/**
+ * Metadata flags for network and socket data type
+ */
 enum oonf_layer2_network_flags {
+  /*! IPv4 prefix/socket is allowed */
   OONF_LAYER2_IPV4_DATA = 1<<0,
+
+  /*! IPv6 prefix/socket is allowed */
   OONF_LAYER2_IPV6_DATA = 1<<1,
+
+  /*! unspecified prefix/socket is allowed */
   OONF_LAYER2_UNSPEC_DATA = 1<<2,
+
+  /*! Only hosts are allowed, no prefixes */
   OONF_LAYER2_HOST_ONLY_DATA = 1<<3,
 };
 
@@ -492,12 +502,6 @@ struct oonf_layer2_net {
   /*! absolute timestamp when network has been active last */
   uint64_t last_seen;
 
-  /*!
-   * DNS delivered that can be used for this interface, e.g.
-   * for DNS service discovery
-   */
-  union netaddr_socket dns;
-
   /*! network wide layer 2 data */
   struct oonf_layer2_data data[OONF_LAYER2_NET_COUNT];
 
@@ -755,6 +759,12 @@ oonf_layer2_net_get_remote_ip(const struct oonf_layer2_net *l2net, const struct 
   return avl_find_element(&l2net->remote_neighbor_ips, addr, l2ip, _net_node);
 }
 
+/**
+ * Add a layer 2 neighbor without supplying a link-id
+ * @param l2net layer-2 network object
+ * @param l2neigh layer2 address of neighbor
+ * @return layer2 neighbor address object, NULL if out of memory
+ */
 static INLINE struct oonf_layer2_neigh *
 oonf_layer2_neigh_add(struct oonf_layer2_net *net, const struct netaddr *l2neigh) {
   struct oonf_layer2_neigh_key key;
@@ -792,11 +802,23 @@ oonf_layer2_neigh_get_lid(const struct oonf_layer2_net *l2net, const struct oonf
   return avl_find_element(&l2net->neighbors, key, l2neigh, _node);
 }
 
+/**
+ * Check if a specific element of a neighbor was modified
+ * @param neigh layer-2 neighbor object
+ * @param mod_mask a binary mask of elements that can be modified
+ * @return true if one of the elements was modified, false otherwise
+ */
 static INLINE bool
 oonf_layer2_neigh_is_modified(const struct oonf_layer2_neigh *neigh, enum oonf_layer2_neigh_mods mod_mask) {
   return (neigh->modified & mod_mask) != 0;
 }
 
+/**
+ * Get the next hop (stored in the neighbor) of a certain address type
+ * @param neigh layer-2 neighbor object
+ * @param af_type AF_INET or AF_INET6
+ * @return next hop addres object, might be unspecified
+ */
 static INLINE const struct netaddr *
 oonf_layer2_neigh_get_nexthop(const struct oonf_layer2_neigh *neigh, int af_type) {
   switch (af_type) {
@@ -809,6 +831,12 @@ oonf_layer2_neigh_get_nexthop(const struct oonf_layer2_neigh *neigh, int af_type
   }
 }
 
+/**
+ * Check if neighbor has a next hop of a certain address type
+ * @param neigh layer-2 neighbor object
+ * @param af_type AF_INET or AF_INET6
+ * @return true if next hop exists, false otherwise
+ */
 static INLINE bool
 oonf_layer2_neigh_has_nexthop(const struct oonf_layer2_neigh *neigh, int af_type) {
   const struct netaddr *next_hop;
@@ -817,11 +845,20 @@ oonf_layer2_neigh_has_nexthop(const struct oonf_layer2_neigh *neigh, int af_type
   return next_hop != NULL && netaddr_get_address_family(next_hop) == af_type;
 }
 
+/**
+ * @param neigh layer-2 neighbor object
+ * @return time when the neighbor has been seen last
+ */
 static INLINE uint64_t
 oonf_layer2_neigh_get_lastseen(const struct oonf_layer2_neigh *neigh) {
   return neigh->_last_seen;
 }
 
+/**
+ * Sets when a neighbor has been seen last
+ * @param neigh layer-2 neighbor object
+ * @param lastseen time when the neighbor has been seen last
+ */
 static INLINE void
 oonf_layer2_neigh_set_lastseen(struct oonf_layer2_neigh *neigh, uint64_t lastseen) {
   if (neigh->_last_seen != lastseen) {
@@ -924,6 +961,11 @@ oonf_layer2_data_read_boolean(bool *buffer, const struct oonf_layer2_data *l2dat
   return 0;
 }
 
+/**
+ * @param l2data layer-2 data object
+ * @return true if the data object contains no data, not a network data
+ *   or network data which is unspecified, false otherwise
+ */
 static INLINE bool
 oonf_layer2_data_netaddr_is_unspec(const struct oonf_layer2_data *l2data) {
   return !l2data->_meta
@@ -943,6 +985,11 @@ oonf_layer2_data_get_netaddr(const struct oonf_layer2_data *l2data) {
   return &l2data->_value.addr;
 }
 
+/**
+ * @param l2data layer-2 data object
+ * @return true if the data object contains no data, not socket data
+ *   or socket data which is unspecified, false otherwise
+ */
 static INLINE bool
 oonf_layer2_data_socket_is_unspec(const struct oonf_layer2_data *l2data) {
   return !l2data->_meta
@@ -962,6 +1009,14 @@ oonf_layer2_data_get_socket(const struct oonf_layer2_data *l2data) {
   return &l2data->_value.socket;
 }
 
+/**
+ * Sets a layer-2 object with network data
+ * @param l2data layer-2 data object
+ * @param origin layer-2 origin
+ * @param meta layer-2 metadata
+ * @param addr network data object
+ * @return true if the data could be set, false otherwise
+ */
 static INLINE bool
 oonf_layer2_data_set_netaddr(struct oonf_layer2_data *l2data, const struct oonf_layer2_origin *origin,
     const struct oonf_layer2_metadata *meta, const struct netaddr *addr) {
@@ -972,6 +1027,14 @@ oonf_layer2_data_set_netaddr(struct oonf_layer2_data *l2data, const struct oonf_
   return oonf_layer2_data_set(l2data, origin, meta, value);
 }
 
+/**
+ * Sets a layer-2 object with socket data
+ * @param l2data layer-2 data object
+ * @param origin layer-2 origin
+ * @param meta layer-2 metadata
+ * @param sock socket data
+ * @return true if the data could be set, false otherwise
+ */
 static INLINE bool
 oonf_layer2_data_set_socket(struct oonf_layer2_data *l2data, const struct oonf_layer2_origin *origin,
     const struct oonf_layer2_metadata *meta, const union netaddr_socket *sock) {
@@ -1014,6 +1077,15 @@ oonf_layer2_data_set_origin(struct oonf_layer2_data *l2data, const struct oonf_l
   l2data->_origin = origin;
 }
 
+
+/**
+ * Convert a text input into a layer-2 data object
+ * @param data destination buffer
+ * @param origin layer-2 origin of data
+ * @param meta layer-2 metadata object
+ * @param input text input
+ * @return true if conversion was successful, false otherwise
+ */
 static INLINE bool
 oonf_layer2_data_from_string(struct oonf_layer2_data *data, const struct oonf_layer2_origin *origin,
   const struct oonf_layer2_metadata *meta, const char *input) {
@@ -1025,16 +1097,47 @@ oonf_layer2_data_from_string(struct oonf_layer2_data *data, const struct oonf_la
   return oonf_layer2_data_set(data, origin, meta, &value);
 }
 
+/**
+ * Converts a network data object into a string
+ * @param buffer destination string buffer
+ * @param length length of destination buffer
+ * @param l2net layer-2 network object
+ * @param idx network data object index
+ * @param raw true for raw conversion, false for iso-prefix conversion
+ */
 static INLINE const char *
 oonf_layer2_net_data_to_string(
-  char *buffer, size_t length, const struct oonf_layer2_data *data, enum oonf_layer2_network_index idx, bool raw) {
-  return oonf_layer2_data_to_string(buffer, length, data, oonf_layer2_net_metadata_get(idx), raw);
+  char *buffer, size_t length, struct oonf_layer2_net *l2net, enum oonf_layer2_network_index idx, bool raw) {
+  return oonf_layer2_data_to_string(buffer, length, &l2net->data[idx], oonf_layer2_net_metadata_get(idx), raw);
 }
 
+/**
+ * Converts a network specific neighbor default data object into a string
+ * @param buffer destination string buffer
+ * @param length length of destination buffer
+ * @param l2net layer-2 network object
+ * @param idx neighbor data object index
+ * @param raw true for raw conversion, false for iso-prefix conversion
+ */
+static INLINE const char *
+oonf_layer2_net_default_data_to_string(
+  char *buffer, size_t length, struct oonf_layer2_net *l2net, enum oonf_layer2_network_index idx, bool raw) {
+  return oonf_layer2_data_to_string(buffer, length, &l2net->data[idx], oonf_layer2_net_metadata_get(idx), raw);
+}
+
+
+/**
+ * Converts a neighbor data object into a string
+ * @param buffer destination string buffer
+ * @param length length of destination buffer
+ * @param l2neigh layer-2 neighbor object
+ * @param idx neighbor data object index
+ * @param raw true for raw conversion, false for iso-prefix conversion
+ */
 static INLINE const char *
 oonf_layer2_neigh_data_to_string(
-  char *buffer, size_t length, const struct oonf_layer2_data *data, enum oonf_layer2_neighbor_index idx, bool raw) {
-  return oonf_layer2_data_to_string(buffer, length, data, oonf_layer2_neigh_metadata_get(idx), raw);
+  char *buffer, size_t length, struct oonf_layer2_neigh *l2neigh, enum oonf_layer2_neighbor_index idx, bool raw) {
+  return oonf_layer2_data_to_string(buffer, length, &l2neigh->data[idx], oonf_layer2_neigh_metadata_get(idx), raw);
 }
 
 /**
@@ -1053,12 +1156,28 @@ oonf_layer2_data_set_bool(struct oonf_layer2_data *l2data, const struct oonf_lay
   return oonf_layer2_data_set(l2data, origin, meta, &value);
 }
 
+/**
+ * Parse a string into a network data base layer-2 data object
+ * @param data destination buffer
+ * @param idx network data index
+ * @param origin layer-2 data origin
+ * @param input input string buffer
+ * @return 0 if everything is okay, -1 otherwise
+ */
 static INLINE int
 oonf_layer2_net_data_from_string(struct oonf_layer2_data *data, enum oonf_layer2_network_index idx,
   struct oonf_layer2_origin *origin, const char *input) {
   return oonf_layer2_data_from_string(data, origin, oonf_layer2_net_metadata_get(idx), input);
 }
 
+/**
+ * Parse a string into a neighbor data base layer-2 data object
+ * @param data destination buffer
+ * @param idx neighbor data index
+ * @param origin layer-2 data origin
+ * @param input input string buffer
+ * @return 0 if everything is okay, -1 otherwise
+ */
 static INLINE int
 oonf_layer2_neigh_data_from_string(struct oonf_layer2_data *data, enum oonf_layer2_neighbor_index idx,
   struct oonf_layer2_origin *origin, const char *input) {

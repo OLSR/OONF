@@ -22,11 +22,14 @@
 #include <oonf/generic/dns_query/dns.h>
 #include <oonf/generic/dns_query/dns_query.h>
 
+/* definitions */
 #define LOG_DNS_QUERY _dns_query_subsystem.logging
 
 struct _dns_query_config {
   uint64_t timeout;
 };
+
+/* prototypes */
 
 static int _init(void);
 static void _cleanup(void);
@@ -35,7 +38,7 @@ static void _cb_process_dns_query(struct oonf_socket_entry *entry);
 static void _cb_dns_timeout(struct oonf_timer_instance *timer);
 static void _cb_config_changed(void);
 
-/* timeouts */
+/* timeout for DNS queries */
 static struct oonf_timer_class _dns_timeout = {
   .name = "dns query timeout",
   .callback = _cb_dns_timeout
@@ -74,17 +77,29 @@ static struct oonf_subsystem _dns_query_subsystem = {
 };
 DECLARE_OONF_PLUGIN(_dns_query_subsystem);
 
+/**
+ * constructor of dns query plugin
+ * @return always 0
+ */
 static int
 _init(void) {
   oonf_timer_add(&_dns_timeout);
   return 0;
 }
 
+/**
+ * destructor of dns query plugin
+ */
 static void
 _cleanup(void) {
   oonf_timer_remove(&_dns_timeout);
 }
 
+/**
+ * Trigger a new DNS query
+ * @param q dns query
+ * @return 0 if query was triggered, error number otherwise
+ */
 int
 dns_query_do(struct oonf_dns_query *q) {
   int error;
@@ -127,6 +142,10 @@ dns_query_do(struct oonf_dns_query *q) {
   return 0;
 }
 
+/**
+ * callback for processing DNS query responses
+ * @param entry socket entry
+ */
 static void
 _cb_process_dns_query(struct oonf_socket_entry *entry) {
   struct oonf_dns_query *q;
@@ -220,6 +239,10 @@ _cb_process_dns_query(struct oonf_socket_entry *entry) {
   }
 }
 
+/**
+ * Callback for handling DNS timeouts
+ * @param timer timer instance
+ */
 static void
 _cb_dns_timeout(struct oonf_timer_instance *timer) {
   struct oonf_dns_query *q;
@@ -234,6 +257,9 @@ _cb_dns_timeout(struct oonf_timer_instance *timer) {
   }
 }
 
+/**
+ * Callback for configuration changes
+ */
 static void
 _cb_config_changed(void) {
   if (cfg_schema_tobin(&_config, _dns_query_section.post, _dns_query_entries, ARRAYSIZE(_dns_query_entries))) {

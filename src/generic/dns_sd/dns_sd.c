@@ -28,6 +28,7 @@
 #include <oonf/generic/dns_sd/dns_sd_intern.h>
 #include <oonf/generic/dns_sd/dns_sd.h>
 
+/* definitions */
 #define LOG_DNS_SD _dns_sd_subsystem.logging
 
 struct _dns_sd_config {
@@ -38,6 +39,7 @@ enum sndsd_cfg {
   CFG_PREFIX
 };
 
+/* keys used for dnssd telnet command */
 #define KEY_CONTEXT_IF     "ctx_if"
 #define KEY_CONTEXT_IP     "ctx_ip"
 #define KEY_CONTEXT_HOST   "ctx_host"
@@ -49,6 +51,7 @@ enum sndsd_cfg {
 #define KEY_SERVICE_IPV4   "service_ipv4"
 #define KEY_SERVICE_IPV6   "service_ipv6"
 
+/* prototypes */
 static int _init(void);
 static void _cleanup(void);
 
@@ -78,7 +81,7 @@ static int _avl_comp_sd_context(const void *k1, const void *k2);
 static int _avl_comp_sd_service(const void *k1, const void *k2);
 static void _cb_config_changed(void);
 
-/* telnet interface */
+/* telnet interface  variables */
 static char _value_ctx_if[IF_NAMESIZE];
 static struct netaddr_str _value_ctx_ip;
 static char _value_ctx_host[512];
@@ -195,21 +198,28 @@ static struct oonf_class _sd_prefix_class = {
   .size = sizeof(struct dns_sd_prefix),
 };
 
+/* storage for sd context */
 static struct oonf_class _sd_context_class = {
   .name = "sd context",
   .size = sizeof(struct dns_sd_context),
 };
 
+/* storage for sd service */
 static struct oonf_class _sd_service_class = {
   .name = "sd result",
   .size = sizeof(struct dns_sd_service),
 };
 
+/* tree of prefixes */
 static struct avl_tree _prefix_tree;
+
+/* tree of known context */
 static struct avl_tree _context_tree;
+
+/* used binary flags for prefixes */
 static uint64_t _used_flags = 0;
 
-/* class extension for layer2 neighbor ips */
+/* callback defintiion for layer2 neighbor ips */
 struct oonf_class_extension _l2neighip_ext = {
   .ext_name = "dns sd",
   .class_name = LAYER2_CLASS_NEIGHBOR_ADDRESS,
@@ -226,6 +236,10 @@ static struct list_entity _update_list;
 /* tree of all dns-sd contexts */
 static struct avl_tree _context_tree;
 
+/**
+ * Constructor for dns sd plugin
+ * @return always 0
+ */
 static int
 _init(void) {
   oonf_class_extension_add(&_l2neighip_ext);
@@ -250,6 +264,9 @@ _init(void) {
   return 0;
 }
 
+/**
+ * Destructor of dns sd plugin
+ */
 static void
 _cleanup(void) {
   struct dns_sd_prefix *prefix, *p_it;
@@ -265,6 +282,10 @@ _cleanup(void) {
   oonf_class_remove(&_sd_service_class);
 }
 
+/**
+ * Add a DNS prefix to the list to query
+ * @param name of DNS prefix
+ */
 struct dns_sd_prefix *
 dns_sd_add(const char *name) {
   struct dns_sd_prefix *prefix;
@@ -304,6 +325,10 @@ dns_sd_add(const char *name) {
   return prefix;
 }
 
+/**
+ * Remove a DNS prefix from the list to query
+ * @param prefix DNS prefix
+ */
 void
 dns_sd_remove(struct dns_sd_prefix *prefix) {
   struct dns_sd_context *context, *c_it;
@@ -332,6 +357,12 @@ dns_sd_remove(struct dns_sd_prefix *prefix) {
   oonf_class_free(&_sd_prefix_class, prefix);
 }
 
+/**
+ * Get a DNS context
+ * @param interface interface name of context
+ * @param ip host IP address of context (base for reverse DNS query)
+ * @return DNS sd context
+ */
 struct dns_sd_context *
 dns_sd_context_get(const char *interface, const struct netaddr *ip) {
   struct dns_sd_context *context;
@@ -343,16 +374,28 @@ dns_sd_context_get(const char *interface, const struct netaddr *ip) {
   return avl_find_element(dns_sd_get_context_tree(), &key, context, _global_node);
 }
 
+/**
+ * @return DNS prefix tree
+ */
 struct avl_tree *
 dns_sd_get_prefix_tree(void) {
   return &_prefix_tree;
 }
 
+/**
+ * @return DNS context tree
+ */
 struct avl_tree *
 dns_sd_get_context_tree(void) {
   return &_context_tree;
 }
 
+/**
+ * Create a new DNS sd context
+ * @param ifname interface name for context
+ * @param ip IP address of context
+ * @return DNS sd context, NULL if out of memory
+ */
 static struct dns_sd_context *
 _add_sd_context(const char *ifname, const struct netaddr *ip) {
   struct dns_sd_context *context;
@@ -381,6 +424,10 @@ _add_sd_context(const char *ifname, const struct netaddr *ip) {
   return context;
 }
 
+/**
+ * Remove an existing DNS sd context
+ * @param context DNS sd context
+ */
 static void
 _remove_sd_context(struct dns_sd_context *context) {
   struct dns_sd_service *service, *s_it;
@@ -393,6 +440,12 @@ _remove_sd_context(struct dns_sd_context *context) {
   oonf_class_free(&_sd_context_class, context);
 }
 
+/**
+ * Create a new DNS sd service
+ * @param prefix registered DNS sd prefix
+ * @param hostname hostname of service
+ * @return DNS sd service, NULL if out of memory
+ */
 static struct dns_sd_service *
 _add_sd_service(struct dns_sd_context *context,
     struct dns_sd_prefix *prefix, const char *hostname) {
@@ -422,6 +475,10 @@ _add_sd_service(struct dns_sd_context *context,
   return service;
 }
 
+/**
+ * Remove an existing DNS sd service
+ * @param context DNS sd context
+ */
 static void
 _remove_sd_service(struct dns_sd_context *context, struct dns_sd_service *service) {
   free ((char *)service->key.hostname);
@@ -433,6 +490,12 @@ _remove_sd_service(struct dns_sd_context *context, struct dns_sd_service *servic
   }
 }
 
+/**
+ * Initialize a reverse DNS query
+ * @param dns dns query to initialize
+ * @param ip IP address the query is about
+ * @return 0 if initialization was successful, -1 otherwise
+ */
 static int
 _get_rdns_arpa_name(struct dns_sd_query *dns, struct netaddr *ip) {
   static const char HEX[]="0123456789abcdef";
@@ -462,6 +525,11 @@ _get_rdns_arpa_name(struct dns_sd_query *dns, struct netaddr *ip) {
   return -1;
 }
 
+/**
+ * Trigger the next DNS query for a DNS context
+ * @param dns dns sd query
+ * @return 0 if query was triggere, -1 otherwise
+ */
 static int
 _work_on_l2neigh_addr(struct dns_sd_query *dns) {
   const struct os_interface_ip *if_ip;
@@ -497,7 +565,7 @@ _work_on_l2neigh_addr(struct dns_sd_query *dns) {
     return -1;
   }
   netaddr_socket_init(&dns->client, &if_ip->address, 0,
-      netaddr_socket_get_scopex(&dns->server));
+      netaddr_socket_get_scope(&dns->server));
 
   if (!dns->context->hostname) {
     /* get hostname */
@@ -534,6 +602,9 @@ _work_on_l2neigh_addr(struct dns_sd_query *dns) {
   return -1;
 }
 
+/**
+ * start a new DNS sd query for the next context in queue
+ */
 static void
 _start_next_query(void) {
   struct dns_sd_context *context;
@@ -582,6 +653,12 @@ _start_next_query(void) {
   }
 }
 
+/**
+ * Add a new DNS context to the working queue, start new DNS query if
+ * the queue was empty
+ * @param ifname interface name of context
+ * @param ip IP address of context
+ */
 static void
 _enqueue_dns_query(const char *ifname, const struct netaddr *ip) {
   struct dns_sd_context *context;
@@ -608,6 +685,11 @@ _enqueue_dns_query(const char *ifname, const struct netaddr *ip) {
   _start_next_query();
 }
 
+/**
+ * Handle result of DNS A result (of DNS SRV query)
+ * @param q dns query
+ * @param response DNS A response
+ */
 static void
 _cb_a_result(struct oonf_dns_query *q, struct dns_a *response) {
   struct dns_sd_query *dnssd_q;
@@ -627,6 +709,11 @@ _cb_a_result(struct oonf_dns_query *q, struct dns_a *response) {
   netaddr_from_binary(addr, &response->addr, 4, AF_INET);
 }
 
+/**
+ * Handle result of DNS AAAA result (of DNS SRV query)
+ * @param q dns query
+ * @param response DNS AAAA response
+ */
 static void
 _cb_aaaa_result(struct oonf_dns_query *q, struct dns_aaaa *response) {
   struct dns_sd_query *dnssd_q;
@@ -646,6 +733,11 @@ _cb_aaaa_result(struct oonf_dns_query *q, struct dns_aaaa *response) {
   netaddr_from_binary(addr, &response->addr, 16, AF_INET6);
 }
 
+/**
+ * Handle result of DNS SRV result
+ * @param q dns query
+ * @param response DNS SRV response
+ */
 static void
 _cb_srv_result(struct oonf_dns_query *q, struct dns_srv *response) {
   struct dns_sd_service *service;
@@ -674,6 +766,11 @@ _cb_srv_result(struct oonf_dns_query *q, struct dns_srv *response) {
   }
 }
 
+/**
+ * Handle result of DNS PTR result
+ * @param q dns query
+ * @param response DNS PTR response
+ */
 static void
 _cb_ptr_result(struct oonf_dns_query *q, struct dns_ptr *response) {
   struct dns_sd_query *dnssd_q;
@@ -687,6 +784,11 @@ _cb_ptr_result(struct oonf_dns_query *q, struct dns_ptr *response) {
   }
 }
 
+/**
+ * Callback for handling end of a DNS query
+ * @param q dns query
+ * @param timeout true if a timeout happened, false if query was finished
+ */
 static void
 _cb_query_done(struct oonf_dns_query *q, bool timeout) {
   struct dns_sd_query *dnssd_q;
@@ -749,18 +851,33 @@ _cb_query_done(struct oonf_dns_query *q, bool timeout) {
   }
 }
 
+/**
+ * Callback for dnssd telnet command
+ * @param con telnet connection
+ * @return telnet result
+ */
 static enum oonf_telnet_result
 _cb_dnssd_cmd(struct oonf_telnet_data *con) {
   return oonf_viewer_telnet_handler(
     con->out, &_template_storage, OONF_DNS_SD_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates));
 }
 
+/**
+ * Callback for dnssd telnet help command
+ * @param con telnet connection
+ * @return telnet result
+ */
 static enum oonf_telnet_result
 _cb_dnssd_help(struct oonf_telnet_data *con) {
   return oonf_viewer_telnet_help(
     con->out, OONF_DNS_SD_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates));
 }
 
+/**
+ * Create text output for DNS sd context
+ * @param template viewer template
+ * @return always 0
+ */
 static int
 _cb_create_text_context(struct oonf_viewer_template *template) {
   struct dns_sd_context *context;
@@ -772,6 +889,11 @@ _cb_create_text_context(struct oonf_viewer_template *template) {
   return 0;
 }
 
+/**
+ * Create text output for DNS sd service
+ * @param template viewer template
+ * @return always 0
+ */
 static int
 _cb_create_text_service(struct oonf_viewer_template *template) {
   struct dns_sd_context *context;
@@ -788,6 +910,11 @@ _cb_create_text_service(struct oonf_viewer_template *template) {
   return 0;
 }
 
+/**
+ * Create text output for DNS sd prefix
+ * @param template viewer template
+ * @return always 0
+ */
 static int
 _cb_create_text_prefix(struct oonf_viewer_template *template) {
   struct dns_sd_prefix *prefix;
@@ -799,6 +926,10 @@ _cb_create_text_prefix(struct oonf_viewer_template *template) {
   return 0;
 }
 
+/**
+ * Initialize output buffers for DNS sd context
+ * @param context DNS sd context
+ */
 static void
 _initialize_context_values(struct dns_sd_context *context) {
   strscpy(_value_ctx_if, context->key.interface, IF_NAMESIZE);
@@ -811,6 +942,10 @@ _initialize_context_values(struct dns_sd_context *context) {
   }
 }
 
+/**
+ * Initialize output buffers for DNS sd service
+ * @param service DNS sd service
+ */
 static void
 _initialize_service_values(struct dns_sd_service *service) {
   strscpy(_value_service_host, service->key.hostname, sizeof(_value_service_host));
@@ -822,6 +957,10 @@ _initialize_service_values(struct dns_sd_service *service) {
   netaddr_to_string(&_value_service_ipv6, &service->ipv6);
 }
 
+/**
+ * Callback for handling new layer2 neighbor IPs
+ * @param ptr layer2 neighbor IP object
+ */
 static void
 _cb_l2neighip_added(void *ptr) {
   struct oonf_layer2_neighbor_address *l2neigh_addr = ptr;
@@ -838,6 +977,12 @@ _cb_l2neighip_added(void *ptr) {
   }
 }
 
+/**
+ * AVL comparator for DNS sd context
+ * @param k1 key 1
+ * @param k2 key 2
+ * @return see memcmp()
+ */
 static int
 _avl_comp_sd_context(const void *k1, const void *k2) {
   const struct dns_sd_context_key *ck1 = k1;
@@ -846,6 +991,12 @@ _avl_comp_sd_context(const void *k1, const void *k2) {
   return memcmp(ck1, ck2, sizeof(*ck1));
 }
 
+/**
+ * AVL comparator for DNS sd service
+ * @param k1 key 1
+ * @param k2 key 2
+ * @return see memcmp()
+ */
 static int
 _avl_comp_sd_service(const void *k1, const void *k2) {
   const struct dns_sd_service_key *sk1 = k1;
@@ -859,6 +1010,9 @@ _avl_comp_sd_service(const void *k1, const void *k2) {
   return strcmp(sk1->prefix->dns_prefix, sk2->prefix->dns_prefix);
 }
 
+/**
+ * Callback for configuration changes
+ */
 static void
 _cb_config_changed(void) {
   struct dns_sd_prefix *sd_prefix;

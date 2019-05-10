@@ -71,12 +71,13 @@ static void _cleanup(void);
 static enum oonf_telnet_result _cb_layer2info(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _cb_layer2info_help(struct oonf_telnet_data *con);
 
-static void _initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data);
+static void _initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net);
+static void _initialize_if_default_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net);
 static void _initialize_if_origin_values(struct oonf_layer2_data *data);
 static void _initialize_if_values(struct oonf_layer2_net *net);
 static void _initialize_if_ip_values(struct oonf_layer2_peer_address *peer_ip);
 
-static void _initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data);
+static void _initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_neigh *l2neigh);
 static void _initialize_neigh_origin_values(struct oonf_layer2_data *data);
 static void _initialize_neigh_values(struct oonf_layer2_neigh *neigh);
 static void _initialize_neigh_ip_values(struct oonf_layer2_neighbor_address *neigh_addr);
@@ -510,16 +511,32 @@ _initialize_if_ip_values(struct oonf_layer2_peer_address *peer_ip) {
 /**
  * Initialize the value buffers for an array of layer2 data objects
  * @param template viewer template
- * @param data array of data objects
+ * @param l2net layer-2 network data
  */
 static void
-_initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data) {
+_initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net) {
   size_t i;
 
   memset(_value_if_data, 0, sizeof(_value_if_data));
 
   for (i = 0; i < OONF_LAYER2_NET_COUNT; i++) {
-    oonf_layer2_net_data_to_string(_value_if_data[i], sizeof(_value_if_data[i]), &data[i], i, template->create_raw);
+    oonf_layer2_net_data_to_string(_value_if_data[i], sizeof(_value_if_data[i]), l2net, i, template->create_raw);
+  }
+}
+
+/**
+ * Initialize the value buffers for an array of layer2 data objects
+ * @param template viewer template
+ * @param l2net layer-2 network data
+ */
+static void
+_initialize_if_default_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net) {
+  size_t i;
+
+  memset(_value_if_data, 0, sizeof(_value_if_data));
+
+  for (i = 0; i < OONF_LAYER2_NET_COUNT; i++) {
+    oonf_layer2_net_default_data_to_string(_value_if_data[i], sizeof(_value_if_data[i]), l2net, i, template->create_raw);
   }
 }
 
@@ -576,17 +593,17 @@ _initialize_neigh_ip_values(struct oonf_layer2_neighbor_address *neigh_addr) {
 /**
  * Initialize the value buffers for an array of layer2 data objects
  * @param template viewer template
- * @param data array of data objects
+ * @param l2neigh layer-2 neighbor object
  */
 static void
-_initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data) {
+_initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_neigh *l2neigh) {
   size_t i;
 
   memset(_value_neigh_data, 0, sizeof(_value_neigh_data));
 
   for (i = 0; i < OONF_LAYER2_NEIGH_COUNT; i++) {
     oonf_layer2_neigh_data_to_string(
-      _value_neigh_data[i], sizeof(_value_neigh_data[i]), &data[i], i, template->create_raw);
+      _value_neigh_data[i], sizeof(_value_neigh_data[i]), l2neigh, i, template->create_raw);
   }
 }
 
@@ -641,7 +658,7 @@ _cb_create_text_interface(struct oonf_viewer_template *template) {
 
   avl_for_each_element(oonf_layer2_get_net_tree(), net, _node) {
     _initialize_if_values(net);
-    _initialize_if_data_values(template, net->data);
+    _initialize_if_data_values(template, net);
     _initialize_if_origin_values(net->data);
 
     /* generate template output */
@@ -688,7 +705,7 @@ _cb_create_text_neighbor(struct oonf_viewer_template *template) {
 
     avl_for_each_element(&net->neighbors, neigh, _node) {
       _initialize_neigh_values(neigh);
-      _initialize_neigh_data_values(template, neigh->data);
+      _initialize_neigh_data_values(template, neigh);
       _initialize_neigh_origin_values(neigh->data);
 
       /* generate template output */
@@ -738,7 +755,7 @@ _cb_create_text_default(struct oonf_viewer_template *template) {
 
   avl_for_each_element(oonf_layer2_get_net_tree(), net, _node) {
     _initialize_if_values(net);
-    _initialize_neigh_data_values(template, net->neighdata);
+    _initialize_if_default_data_values(template, net);
     _initialize_neigh_origin_values(net->neighdata);
 
     /* generate template output */

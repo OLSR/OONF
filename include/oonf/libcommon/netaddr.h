@@ -448,13 +448,21 @@ netaddr_socket_get_addressfamily(const union netaddr_socket *s) {
   return s->std.sa_family;
 }
 
+/**
+ * @param sock netaddr socket
+ * @return binary address length of socket address
+ */
 static INLINE size_t
 netaddr_socket_get_addr_binlength(const union netaddr_socket *sock) {
   return netaddr_get_af_maxprefix(sock->std.sa_family) >> 3;
 }
 
+/**
+ * @param sock netaddr socket
+ * @return IPv6 socket scope (interface index), 0 if not available
+ */
 static INLINE unsigned
-netaddr_socket_get_scopex(const union netaddr_socket *sock) {
+netaddr_socket_get_scope(const union netaddr_socket *sock) {
   return netaddr_socket_get_addressfamily(sock) == AF_INET6 ? sock->v6.sin6_scope_id : 0;
 }
 
