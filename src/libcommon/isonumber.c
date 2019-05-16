@@ -219,6 +219,9 @@ isonumber_to_u64(uint64_t *dst, const char *iso, uint64_t scaling) {
           prefix--;
         }
       }
+      else {
+        return -1;
+      }
     }
   }
 
