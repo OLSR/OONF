@@ -155,6 +155,7 @@ isonumber_to_s64(int64_t *dst, const char *iso, uint64_t scaling) {
 int
 isonumber_to_u64(uint64_t *dst, const char *iso, uint64_t scaling) {
   static const char symbol_large[] = " kMGTPE";
+  static const char symbol_small[] = " munpfa";
 
   uint64_t num, fraction_scale, factor;
   char *next = NULL, *prefix;
@@ -204,13 +205,20 @@ isonumber_to_u64(uint64_t *dst, const char *iso, uint64_t scaling) {
     }
 
     prefix = strchr(symbol_large, next[0]);
-    if (!prefix) {
-      return -1;
+    if (prefix) {
+      while (prefix > symbol_large) {
+        factor *= 1000;
+        prefix--;
+      }
     }
-
-    while (prefix > symbol_large) {
-      factor *= 1000;
-      prefix--;
+    else {
+      prefix = strchr(symbol_small, next[0]);
+      if (prefix) {
+        while (prefix > symbol_small) {
+          fraction_scale *= 1000;
+          prefix--;
+        }
+      }
     }
   }
 

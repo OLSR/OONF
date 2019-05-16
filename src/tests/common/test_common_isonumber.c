@@ -91,7 +91,7 @@ test_str_from_isonumber_u64(void) {
 }
 
 static void
-test_isonumber_to_u64_to_string(void) {
+test_isonumber_to_u64_from_string(void) {
   static const char *tests[] = {
       "1.0", "1k", "1.024k", "1M", "1.024M", "1.023k"
   };
@@ -119,14 +119,14 @@ test_isonumber_to_u64_to_string(void) {
 }
 
 static void
-test_isonumber_to_s64_to_string(void) {
+test_isonumber_to_s64_from_string(void) {
   static const char *tests[] = {
        "1k",  "1.024k",  "1M",  "1.024M",  "1.023k",
-      "-1k", "-1.024k", "-1M", "-1.024M", "-1.023k"
+      "-1k", "-1.024k", "-1M", "-1.024M", "-1.023k",
   };
   static int64_t results[] = {
        1000,  1024,  1000*1000,  1000*1024,  1023,
-      -1000, -1024, -1000*1000, -1000*1024, -1023
+      -1000, -1024, -1000*1000, -1000*1024, -1023,
   };
 
   size_t i;
@@ -147,6 +147,37 @@ test_isonumber_to_s64_to_string(void) {
   }
   END_TEST();
 }
+
+static void
+test_isonumber_to_s64_from_string_2(void) {
+  static const char *tests[] = {
+       "1m",  "1.024m",  "1u",  "1.024u",  "1.023m",  "1n",
+      "-1m", "-1.024m", "-1u", "-1.024u", "-1.023m", "-1n",
+  };
+  static int64_t results[] = {
+       1000000,  1024000,  1000,  1024,  1023000,  1,
+      -1000000, -1024000, -1000, -1024, -1023000, -1,
+  };
+
+  size_t i;
+
+  int64_t result;
+  int tmp;
+
+  START_TEST();
+
+  for (i=0; i<ARRAYSIZE(tests); i++) {
+    result = 0;
+    tmp = isonumber_to_s64(&result, tests[i], 1000000000);
+    CHECK_TRUE(tmp == 0, "isonumber_to_u64(\"%s\") failed", tests[i]);
+    if (!tmp) {
+      CHECK_TRUE(result== results[i], "isonumber_to_u64(\"%s\") != %"PRId64" (was %"PRId64")",
+          tests[i], results[i], result);
+    }
+  }
+  END_TEST();
+}
+
 
 static void
 test_str_from_isonumber_s64(void) {
@@ -192,15 +223,16 @@ test_str_from_isonumber_s64_2(void) {
   END_TEST();
 }
 
+
 int
 main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))) {
   BEGIN_TESTING(clear_elements);
 
   test_str_from_isonumber_u64();
-  test_isonumber_to_u64_to_string();
-
+  test_isonumber_to_u64_from_string();
   test_str_from_isonumber_s64();
-  test_isonumber_to_s64_to_string();
+  test_isonumber_to_s64_from_string();
+  test_isonumber_to_s64_from_string_2();
   test_str_from_isonumber_s64_2();
 
   return FINISH_TESTING();
