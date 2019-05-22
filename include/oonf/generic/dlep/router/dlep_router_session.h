@@ -85,9 +85,6 @@ struct dlep_router_session {
 
   /*! back pointer to interface session */
   struct dlep_router_if *interface;
-
-  /*! remember all streams bound to an interface */
-  struct avl_node _node;
 };
 
 void dlep_router_session_init(void);

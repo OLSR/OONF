@@ -43,12 +43,11 @@
  * @file
  */
 
-#ifndef DLEP_RADIO_INTERNAL_H_
-#define DLEP_RADIO_INTERNAL_H_
+#ifndef DLEP_H_
+#define DLEP_H_
 
-#include <oonf/libcore/oonf_logging.h>
+/*! subsystem identifier */
+#define OONF_DLEP_SUBSYSTEM "dlep"
 
-/* headers only for use inside the DLEP_RADIO subsystem */
-extern enum oonf_log_source LOG_DLEP_RADIO;
+#endif /* DLEP_H_ */
 
-#endif /* DLEP_RADIO_INTERNAL_H_ */

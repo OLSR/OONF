@@ -48,7 +48,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              remotecontrol
                              layer2_config
                              layer2_import
-                             dlep_radio
+                             dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

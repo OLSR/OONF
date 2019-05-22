@@ -535,7 +535,7 @@ _l2_neigh_added(struct oonf_layer2_neigh *l2neigh, struct oonf_layer2_destinatio
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (l2dest && !radio_session->session.cfg.send_proxied) {
       continue;
     }
@@ -564,7 +564,7 @@ _l2_neigh_changed(
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (l2dest && !radio_session->session.cfg.send_proxied) {
       continue;
     }
@@ -618,7 +618,7 @@ _l2_neigh_removed(
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (l2dest && !radio_session->session.cfg.send_proxied) {
       continue;
     }
@@ -654,7 +654,7 @@ _cb_l2_net_changed(void *ptr) {
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (radio_session->session.restrict_signal == DLEP_ALL_SIGNALS) {
       dlep_session_generate_signal(&radio_session->session, DLEP_SESSION_UPDATE, NULL);
     }

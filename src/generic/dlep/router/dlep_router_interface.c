@@ -63,8 +63,10 @@
 #include <oonf/generic/dlep/dlep_session.h>
 #include <oonf/generic/dlep/dlep_writer.h>
 
-#include <oonf/generic/dlep/router/dlep_router.h>
 #include <oonf/generic/dlep/router/dlep_router_interface.h>
+#include <oonf/generic/dlep/router/dlep_router_session.h>
+#include <oonf/generic/dlep/dlep_internal.h>
+#include <oonf/generic/dlep/dlep.h>
 
 #include <oonf/generic/dlep/ext_base_ip/ip.h>
 #include <oonf/generic/dlep/ext_base_metric/metric.h>
@@ -74,8 +76,6 @@
 #include <oonf/generic/dlep/ext_radio_attributes/radio_attributes.h>
 #include <oonf/generic/dlep/ext_lid/lid.h>
 #include <oonf/generic/dlep/ext_dns/dns.h>
-#include <oonf/generic/dlep/router/dlep_router_internal.h>
-#include <oonf/generic/dlep/router/dlep_router_session.h>
 
 static void _connect_to_setup(struct dlep_router_if *router_if);
 static void _check_connect_to(struct dlep_router_if *router_if);
@@ -118,15 +118,8 @@ void
 dlep_router_interface_init(void) {
   oonf_class_add(&_router_if_class);
 
-  dlep_extension_init();
-  dlep_session_init();
   dlep_router_session_init();
   dlep_base_proto_router_init();
-  dlep_base_metric_init();
-  dlep_base_ip_init();
-  dlep_l1_statistics_init();
-  dlep_l2_statistics_init();
-  dlep_radio_attributes_init();
   dlep_lid_init();
   dlep_dns_init();
 
@@ -154,9 +147,7 @@ dlep_router_interface_cleanup(void) {
 
   oonf_class_remove(&_router_if_class);
 
-  dlep_base_ip_cleanup();
   dlep_router_session_cleanup();
-  dlep_extension_cleanup();
 #if 0
   oonf_layer2_origin_remove(&_l2_origin);
   oonf_layer2_origin_remove(&_l2_default_origin);
@@ -294,7 +285,7 @@ dlep_router_terminate_all_sessions(void) {
   _shutting_down = true;
 
   avl_for_each_element(dlep_if_get_tree(false), interf, interf._node) {
-    avl_for_each_element(&interf->interf.session_tree, router_session, _node) {
+    avl_for_each_element(&interf->interf.session_tree, router_session, session._node) {
       dlep_session_terminate(&router_session->session, DLEP_STATUS_OKAY, "DLEP router is shutting down");
     }
   }
@@ -340,7 +331,7 @@ _cleanup_interface(struct dlep_router_if *interface) {
   struct dlep_router_session *stream, *it;
 
   /* close TCP connection and socket */
-  avl_for_each_element_safe(&interface->interf.session_tree, stream, _node, it) {
+  avl_for_each_element_safe(&interface->interf.session_tree, stream, session._node, it) {
     dlep_router_remove_session(stream);
   }
 }

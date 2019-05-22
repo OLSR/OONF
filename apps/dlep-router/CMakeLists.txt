@@ -50,7 +50,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              layer2_export
                              dns_query
                              dns_sd
-                             dlep_router
+                             dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

@@ -58,7 +58,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              layer2_import
                              auto_ll4
                              http
-                             dlep_router
+                             dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

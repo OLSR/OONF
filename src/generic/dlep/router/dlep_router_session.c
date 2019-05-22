@@ -59,10 +59,10 @@
 #include <oonf/generic/dlep/dlep_iana.h>
 #include <oonf/generic/dlep/dlep_session.h>
 #include <oonf/generic/dlep/dlep_writer.h>
-#include <oonf/generic/dlep/router/dlep_router.h>
 #include <oonf/generic/dlep/router/dlep_router_interface.h>
-#include <oonf/generic/dlep/router/dlep_router_internal.h>
 #include <oonf/generic/dlep/router/dlep_router_session.h>
+#include <oonf/generic/dlep/dlep_internal.h>
+#include <oonf/generic/dlep/dlep.h>
 
 static void _cb_socket_terminated(struct oonf_stream_socket *stream_socket);
 static void _cb_tcp_lost(struct oonf_stream_session *);
@@ -102,7 +102,7 @@ struct dlep_router_session *
 dlep_router_get_session(struct dlep_router_if *interf, union netaddr_socket *remote) {
   struct dlep_router_session *session;
 
-  return avl_find_element(&interf->interf.session_tree, remote, session, _node);
+  return avl_find_element(&interf->interf.session_tree, remote, session, session._node);
 }
 
 /**
@@ -135,7 +135,7 @@ dlep_router_add_session(struct dlep_router_if *interf, union netaddr_socket *loc
 
   /* initialize tree node */
   memcpy(&router_session->session.remote_socket, remote, sizeof(*remote));
-  router_session->_node.key = &router_session->session.remote_socket;
+  router_session->session._node.key = &router_session->session.remote_socket;
 
   /* configure and open TCP session */
   router_session->tcp.config.session_timeout = 120000; /* 120 seconds */
@@ -177,8 +177,12 @@ dlep_router_add_session(struct dlep_router_if *interf, union netaddr_socket *loc
   /* initialize back pointer */
   router_session->interface = interf;
 
+  /* copy local socket */
+  memcpy(&router_session->session.local_socket, &router_session->stream->stream_socket->local_socket,
+         sizeof(router_session->session.local_socket));
+
   /* add session to interface */
-  avl_insert(&interf->interf.session_tree, &router_session->_node);
+  avl_insert(&interf->interf.session_tree, &router_session->session._node);
 
   /* inform all extensions */
   avl_for_each_element(dlep_extension_get_tree(), ext, _node) {
@@ -241,8 +245,8 @@ _cb_tcp_lost(struct oonf_stream_session *tcp_session) {
   dlep_session_remove(&router_session->session);
 
   /* remove from session tree of interface */
-  if (avl_is_node_added(&router_session->_node)) {
-    avl_remove(&router_session->interface->interf.session_tree, &router_session->_node);
+  if (avl_is_node_added(&router_session->session._node)) {
+    avl_remove(&router_session->interface->interf.session_tree, &router_session->session._node);
   }
 }
 

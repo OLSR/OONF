@@ -43,12 +43,11 @@
  * @file
  */
 
-#ifndef DLEP_ROUTER_INTERNAL_H_
-#define DLEP_ROUTER_INTERNAL_H_
+#ifndef DLEP_TELNET_H_
+#define DLEP_TELNET_H_
 
-#include <oonf/libcore/oonf_logging.h>
+int dlep_telnet_init(void);
+void dlep_telnet_cleanup(void);
 
-/* headers only for use inside the DLEP_ROUTER subsystem */
-extern enum oonf_log_source LOG_DLEP_ROUTER;
+#endif /* DLEP_TELNET_H_ */
 
-#endif /* DLEP_ROUTER_INTERNAL_H_ */

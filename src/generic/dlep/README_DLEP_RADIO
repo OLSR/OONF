@@ -2,10 +2,10 @@
 ==================
 DLEP_RADIO plugin by Henning Rogge
 
-The plugin implements Draft-07 of the Dynamic Link Exchange Protocol of the
+The plugin implements RFC 8175 (Dynamic Link Exchange Protocol) of the
 IETF MANET group. It was written as part of the EU CONFINE project in 2014.
 
-See https://tools.ietf.org/html/draft-ietf-manet-dlep-07 for details.
+See https://tools.ietf.org/html/rfc8175 for details.
 
 
 

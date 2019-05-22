@@ -336,8 +336,14 @@ struct dlep_session {
   /*! rate of remote heartbeats */
   uint64_t remote_heartbeat_interval;
 
+  /*! local endpoint of current communication */
+  union netaddr_socket local_socket;
+
   /*! remote endpoint of current communication */
   union netaddr_socket remote_socket;
+
+  /*! timestamp when the session was established */
+  uint64_t activation_time;
 
   /*! timeout for acknowledgement signal */
   struct oonf_timer_instance _ack_timeout;
@@ -347,6 +353,9 @@ struct dlep_session {
 
   /*! session data for IP extension */
   struct dlep_session_ext_ip _ext_ip;
+
+  /*! remember all streams bound to an interface */
+  struct avl_node _node;
 };
 
 void dlep_session_init(void);

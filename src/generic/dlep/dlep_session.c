@@ -48,6 +48,7 @@
 #include <oonf/oonf.h>
 #include <oonf/libcore/oonf_logging.h>
 #include <oonf/base/oonf_class.h>
+#include <oonf/base/oonf_clock.h>
 #include <oonf/base/oonf_stream_socket.h>
 #include <oonf/base/oonf_timer.h>
 
@@ -169,6 +170,7 @@ dlep_session_add(struct dlep_session *session, const char *l2_ifname, const stru
   }
 
   avl_init(&session->_ext_ip.prefix_modification, avl_comp_netaddr, false);
+  session->activation_time = oonf_clock_getNow();
 
   OONF_INFO(session->log_source, "Add session on %s", session->l2_listener.name);
   return 0;
@@ -188,6 +190,9 @@ dlep_session_remove(struct dlep_session *session) {
 
   OONF_DEBUG(session->log_source, "Remove session if %s to %s", session->l2_listener.name,
     netaddr_socket_to_string(&nbuf, &session->remote_socket));
+
+  netaddr_socket_invalidate(&session->local_socket);
+  netaddr_socket_invalidate(&session->remote_socket);
 
   os_interface_remove(&session->l2_listener);
 

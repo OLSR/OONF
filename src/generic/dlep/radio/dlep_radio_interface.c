@@ -57,7 +57,6 @@
 #include <oonf/generic/dlep/dlep_session.h>
 #include <oonf/generic/dlep/dlep_writer.h>
 
-#include <oonf/generic/dlep/radio/dlep_radio.h>
 #include <oonf/generic/dlep/radio/dlep_radio_interface.h>
 
 #include <oonf/generic/dlep/ext_base_ip/ip.h>
@@ -68,8 +67,9 @@
 #include <oonf/generic/dlep/ext_radio_attributes/radio_attributes.h>
 #include <oonf/generic/dlep/ext_lid/lid.h>
 #include <oonf/generic/dlep/ext_dns/dns.h>
-#include <oonf/generic/dlep/radio/dlep_radio_internal.h>
 #include <oonf/generic/dlep/radio/dlep_radio_session.h>
+#include <oonf/generic/dlep/dlep_internal.h>
+#include <oonf/generic/dlep/dlep.h>
 
 static void _cleanup_interface(struct dlep_radio_if *interface);
 
@@ -104,21 +104,9 @@ int
 dlep_radio_interface_init(void) {
   oonf_class_add(&_interface_class);
 
-  dlep_extension_init();
-  dlep_session_init();
   dlep_radio_session_init();
   dlep_base_proto_radio_init();
-  dlep_base_ip_init();
-  dlep_base_metric_init();
-  dlep_l1_statistics_init();
-  dlep_l2_statistics_init();
-  dlep_radio_attributes_init();
-  dlep_lid_init();
-  dlep_dns_init();
-#if 0
-  oonf_layer2_origin_add(&_l2_origin);
-  oonf_layer2_origin_add(&_l2_default_origin);
-#endif
+
   _shutting_down = false;
   return 0;
 }
@@ -137,7 +125,6 @@ dlep_radio_interface_cleanup(void) {
 
   oonf_class_remove(&_interface_class);
   dlep_radio_session_cleanup();
-  dlep_extension_cleanup();
 #if 0
   oonf_layer2_origin_remove(&_l2_origin);
   oonf_layer2_origin_remove(&_l2_default_origin);
@@ -275,7 +262,7 @@ dlep_radio_terminate_all_sessions(void) {
   _shutting_down = true;
 
   avl_for_each_element(dlep_if_get_tree(true), interf, interf._node) {
-    avl_for_each_element(&interf->interf.session_tree, radio_session, _node) {
+    avl_for_each_element(&interf->interf.session_tree, radio_session, session._node) {
       dlep_session_terminate(&radio_session->session, DLEP_STATUS_OKAY, "DLEP radio is shutting down");
     }
   }
@@ -290,7 +277,7 @@ _cleanup_interface(struct dlep_radio_if *interface) {
   struct dlep_radio_session *stream, *it;
 
   /* close TCP connection and socket */
-  avl_for_each_element_safe(&interface->interf.session_tree, stream, _node, it) {
+  avl_for_each_element_safe(&interface->interf.session_tree, stream, session._node, it) {
     dlep_radio_remove_session(stream);
   }
 }
