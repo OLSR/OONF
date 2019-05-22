@@ -64,6 +64,15 @@ struct _l2export_data {
   /*! originator to import, defined as the section name */
   char originator[16];
 
+  /*! address filter */
+  struct netaddr_acl filter;
+
+  /*! filter by prefix length */
+  int32_t min_prefix_length;
+
+  /*! filter by prefix length */
+  int32_t max_prefix_length;
+
   /*! fib distance */
   int32_t fib_distance;
 
@@ -120,7 +129,7 @@ static void _initiate_shutdown(void);
 
 static struct _l2export_data *_get_l2export(const char *name);
 static void _destroy_l2export(struct _l2export_data *);
-static bool _is_matching_origin(struct oonf_layer2_neighbor_address *, const char *pattern);
+static bool _is_matching_route(struct oonf_layer2_neighbor_address *, struct _l2export_data *);
 
 static struct _l2export_route *_get_route(struct _l2export_data *data, struct os_route_key *key);
 static void _destroy_route(struct _l2export_route *route);
@@ -132,6 +141,13 @@ static void _cb_l2neigh_ip_removed(void *);
 static void _cb_cfg_changed(void);
 
 static struct cfg_schema_entry _l2export_entries[] = {
+  CFG_MAP_ACL(_l2export_data, filter, "matches", ACL_DEFAULT_ACCEPT,
+    "Ip addresses the filter should be applied to"
+    " (the plugin will never import loopback, linklocal or multicast IPs)"),
+  CFG_MAP_INT32_MINMAX(_l2export_data, min_prefix_length, "min_prefix_length", "0",
+    "Minimal acceptable prefix length to import", 0, 0, 128),
+  CFG_MAP_INT32_MINMAX(_l2export_data, max_prefix_length, "max_prefix_length", "128",
+    "Maximum acceptable prefix length to import", 0, 0, 128),
   CFG_MAP_INT32_MINMAX(_l2export_data, fib_distance, "fib_distance", "2",
       "fib distance for exported layer2 entries", 0, 1, 255),
   CFG_MAP_INT32_MINMAX(_l2export_data, fib_table, "fib_table", "254",
@@ -273,6 +289,9 @@ _destroy_l2export(struct _l2export_data *l2export) {
     _destroy_route(l2route);
   }
 
+  /* free filter resources */
+  netaddr_acl_remove(&l2export->filter);
+
   /* first remove the import settings from the tree */
   avl_remove(&_l2export_tree, &l2export->_node);
 
@@ -286,19 +305,41 @@ _destroy_l2export(struct _l2export_data *l2export) {
 * @return true if matching, false otherwise
 */
 static bool
-_is_matching_origin(struct oonf_layer2_neighbor_address *addr, const char *pattern) {
+_is_matching_route(struct oonf_layer2_neighbor_address *addr, struct _l2export_data *data) {
   int len;
+#ifdef OONF_LOG_DEBUG_INFO
+  struct netaddr_str nbuf;
+#endif
 
-  if (strcmp(addr->origin->name, pattern) == 0) {
-    return true;
+  /* check prefix length */
+  if (data->min_prefix_length > netaddr_get_prefix_length(&addr->ip)) {
+    OONF_DEBUG(LOG_L2EXPORT, "prefix length %u is too small (filter was %d)",
+               netaddr_get_prefix_length(&addr->ip), data->min_prefix_length);
+    return false;
   }
-
-  len = strlen(pattern);
-  if (len == 0 || pattern[len-1] != '*') {
+  if (data->max_prefix_length < netaddr_get_prefix_length(&addr->ip)) {
+    OONF_DEBUG(LOG_L2EXPORT, "prefix length %u is too large (filter was %d)",
+               netaddr_get_prefix_length(&addr->ip), data->max_prefix_length);
+    return false;
+  }
+  /* check if destination matches */
+  if (!netaddr_acl_check_accept(&data->filter, &addr->ip)) {
+    OONF_DEBUG(LOG_L2EXPORT, "Bad prefix %s", netaddr_to_string(&nbuf, &addr->ip));
     return false;
   }
 
-  return strncmp(addr->origin->name, pattern, len-1) == 0;
+  /* check if originator name is exact match */
+  if (strcmp(addr->origin->name, data->originator) == 0) {
+    return true;
+  }
+
+  /* check if originator has wildcard and is a prefix match */
+  len = strlen(data->originator);
+  if (len == 0 || data->originator[len-1] != '*') {
+    return false;
+  }
+
+  return strncmp(addr->origin->name, data->originator, len-1) == 0;
 }
 
 /**
@@ -428,7 +469,7 @@ _cb_l2neigh_ip_added(void *ptr) {
   avl_for_each_element(&_l2export_tree, l2export, _node) {
     OONF_DEBUG(LOG_L2EXPORT, "Check export %s against originator %s",
                    l2export->originator, nip->origin->name);
-    if (_is_matching_origin(nip, l2export->originator)) {
+    if (_is_matching_route(nip, l2export)) {
       OONF_DEBUG(LOG_L2EXPORT, "match");
       l2route = _get_route(l2export, &rt_key);
       if (!l2route) {
@@ -475,7 +516,7 @@ _cb_l2neigh_ip_removed(void *ptr) {
   avl_for_each_element(&_l2export_tree, l2export, _node) {
     OONF_DEBUG(LOG_L2EXPORT, "Check export %s against originator %s",
                l2export->originator, nip->origin->name);
-    if (_is_matching_origin(nip, l2export->originator)) {
+    if (_is_matching_route(nip, l2export)) {
       OONF_DEBUG(LOG_L2EXPORT, "match");
       l2route = avl_find_element(&l2export->route_tree, &rt_key, l2route, _node);
       if (l2route) {

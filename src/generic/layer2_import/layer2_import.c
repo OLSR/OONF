@@ -81,8 +81,11 @@ struct _import_entry {
   /*! address filter */
   struct netaddr_acl filter;
 
-  /*! filter by prefix length, -1 to ignore */
-  int32_t prefix_length;
+  /*! filter by prefix length */
+  int32_t min_prefix_length;
+
+  /*! filter by prefix length */
+  int32_t max_prefix_length;
 
   /*! filter by interface name, length null to ignore*/
   char ifname[IF_NAMESIZE];
@@ -137,8 +140,10 @@ static struct cfg_schema_entry _l2_entries[] = {
   CFG_MAP_ACL(_import_entry, filter, "matches", ACL_DEFAULT_ACCEPT,
     "Ip addresses the filter should be applied to"
     " (the plugin will never import loopback, linklocal or multicast IPs)"),
-  CFG_MAP_INT32_MINMAX(_import_entry, prefix_length, "prefix_length", "-1",
-    "Prefix length the filter should be applied to, -1 for any prefix length", 0, -1, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, min_prefix_length, "min_prefix_length", "0",
+    "Minimal acceptable prefix length to import", 0, 0, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, max_prefix_length, "max_prefix_length", "128",
+    "Maximum acceptable prefix length to import", 0, 0, 128),
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
@@ -161,8 +166,10 @@ static struct cfg_schema_entry _lan_entries[] = {
   CFG_MAP_ACL(_import_entry, filter, "matches", ACL_DEFAULT_ACCEPT,
     "Ip addresses the filter should be applied to"
     " (the plugin will never import loopback, linklocal or multicast IPs)"),
-  CFG_MAP_INT32_MINMAX(_import_entry, prefix_length, "prefix_length", "-1",
-    "Prefix length the filter should be applied to, -1 for any prefix length", 0, -1, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, min_prefix_length, "min_prefix_length", "0",
+    "Minimal acceptable prefix length to import", 0, 0, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, max_prefix_length, "max_prefix_length", "128",
+    "Maximum acceptable prefix length to import", 0, 0, 128),
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
@@ -405,15 +412,14 @@ _cb_rt_event(const struct os_route *route, bool set) {
     }
 
     /* check prefix length */
-    if (import->prefix_length != -1 && import->prefix_length != netaddr_get_prefix_length(&route->p.key.dst)) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Bad prefix length %u (filter was %d)",
-                 netaddr_get_prefix_length(&route->p.key.dst), import->prefix_length);
+    if (import->min_prefix_length > netaddr_get_prefix_length(&route->p.key.dst)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "prefix length %u is too small (filter was %d)",
+                 netaddr_get_prefix_length(&route->p.key.dst), import->min_prefix_length);
       continue;
     }
-
-    /* check if destination matches */
-    if (!netaddr_acl_check_accept(&import->filter, &route->p.key.dst)) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Bad prefix %s", netaddr_to_string(&nbuf, &route->p.key.dst));
+    if (import->max_prefix_length < netaddr_get_prefix_length(&route->p.key.dst)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "prefix length %u is too large (filter was %d)",
+                 netaddr_get_prefix_length(&route->p.key.dst), import->max_prefix_length);
       continue;
     }
 
@@ -445,6 +451,12 @@ _cb_rt_event(const struct os_route *route, bool set) {
         OONF_DEBUG(LOG_L2_IMPORT, "Bad interface '%s' (filter was '%s')", ifname, import->ifname);
         continue;
       }
+    }
+
+    /* check if destination matches */
+    if (!netaddr_acl_check_accept(&import->filter, &route->p.key.dst)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "Bad prefix %s", netaddr_to_string(&nbuf, &route->p.key.dst));
+      continue;
     }
 
     /* see if user wants to overwrite layer2 network name */
