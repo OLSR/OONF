@@ -771,10 +771,13 @@ oonf_layer2_net_add_ip(
     l2addr->_global_node.key = &l2addr->ip;
     avl_insert(&_local_peer_ips_tree, &l2addr->_global_node);
 
+    l2addr->origin = origin;
+
     oonf_class_event(&_l2net_addr_class, l2addr, OONF_OBJECT_ADDED);
   }
-
-  l2addr->origin = origin;
+  else {
+    l2addr->origin = origin;
+  }
   return l2addr;
 }
 

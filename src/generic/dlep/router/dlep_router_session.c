@@ -72,7 +72,7 @@ static void _cb_end_session(struct dlep_session *session);
 
 /* session objects */
 static struct oonf_class _router_session_class = {
-  .name = "DLEP router stream",
+  .name = OONF_CLASS_DLEP_ROUTER_SESSION,
   .size = sizeof(struct dlep_router_session),
 };
 
@@ -99,7 +99,7 @@ dlep_router_session_cleanup(void) {
  * @return dlep router session, NULL if not found
  */
 struct dlep_router_session *
-dlep_router_get_session(struct dlep_router_if *interf, union netaddr_socket *remote) {
+dlep_router_get_if_session(struct dlep_router_if *interf, union netaddr_socket *remote) {
   struct dlep_router_session *session;
 
   return avl_find_element(&interf->interf.session_tree, remote, session, session._node);
@@ -118,7 +118,7 @@ dlep_router_add_session(struct dlep_router_if *interf, union netaddr_socket *loc
   struct dlep_extension *ext;
   struct netaddr_str nbuf1, nbuf2;
 
-  router_session = dlep_router_get_session(interf, remote);
+  router_session = dlep_router_get_if_session(interf, remote);
   if (router_session) {
     OONF_DEBUG(LOG_DLEP_ROUTER,
       "use existing instance on"

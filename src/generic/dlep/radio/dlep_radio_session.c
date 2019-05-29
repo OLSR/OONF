@@ -68,7 +68,7 @@ static void _cb_send_buffer(struct dlep_session *session, int af_family);
 static void _cb_end_session(struct dlep_session *session);
 
 static struct oonf_class _radio_session_class = {
-  .name = "DLEP TCP session",
+  .name = OONF_CLASS_DLEP_RADIO_SESSION,
   .size = sizeof(struct dlep_radio_session),
 };
 

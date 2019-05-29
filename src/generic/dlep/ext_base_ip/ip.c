@@ -56,6 +56,7 @@
 #include <oonf/generic/dlep/dlep_writer.h>
 #include <oonf/generic/dlep/radio/dlep_radio_interface.h>
 #include <oonf/generic/dlep/radio/dlep_radio_session.h>
+#include <oonf/generic/dlep/router/dlep_router_session.h>
 
 #include <oonf/generic/dlep/ext_base_ip/ip.h>
 
@@ -67,11 +68,11 @@ struct _prefix_storage {
 
 static void _cb_session_init(struct dlep_session *session);
 static void _cb_session_cleanup(struct dlep_session *session);
-static int _radio_write_session_update(
+static int _write_session_update(
   struct dlep_extension *ext, struct dlep_session *session, const struct oonf_layer2_neigh_key *neigh);
 static int _radio_write_destination_update(
   struct dlep_extension *ext, struct dlep_session *session, const struct oonf_layer2_neigh_key *neigh);
-static enum dlep_parser_error _router_process_session_update(struct dlep_extension *ext, struct dlep_session *session);
+static enum dlep_parser_error _process_session_update(struct dlep_extension *ext, struct dlep_session *session);
 static enum dlep_parser_error _router_process_destination_update(
   struct dlep_extension *ext, struct dlep_session *session);
 static void _add_prefix(struct avl_tree *tree, struct netaddr *addr);
@@ -94,13 +95,26 @@ static const uint16_t _ip_duplicate_tlvs[] = {
 /* supported signals of this extension */
 static struct dlep_extension_signal _signals[] = {
   {
+    .id = DLEP_SESSION_INITIALIZATION,
+    .supported_tlvs = _ip_tlvs,
+    .supported_tlv_count = ARRAYSIZE(_ip_tlvs),
+    .duplicate_tlvs = _ip_duplicate_tlvs,
+    .duplicate_tlv_count = ARRAYSIZE(_ip_duplicate_tlvs),
+    .add_radio_tlvs = _write_session_update,
+    .process_radio = _process_session_update,
+    .add_router_tlvs = _write_session_update,
+    .process_router = _process_session_update,
+  },
+  {
     .id = DLEP_SESSION_INITIALIZATION_ACK,
     .supported_tlvs = _ip_tlvs,
     .supported_tlv_count = ARRAYSIZE(_ip_tlvs),
     .duplicate_tlvs = _ip_duplicate_tlvs,
     .duplicate_tlv_count = ARRAYSIZE(_ip_duplicate_tlvs),
-    .add_radio_tlvs = _radio_write_session_update,
-    .process_router = _router_process_session_update,
+    .add_radio_tlvs = _write_session_update,
+    .process_radio = _process_session_update,
+    .add_router_tlvs = _write_session_update,
+    .process_router = _process_session_update,
   },
   {
     .id = DLEP_SESSION_UPDATE,
@@ -108,8 +122,10 @@ static struct dlep_extension_signal _signals[] = {
     .supported_tlv_count = ARRAYSIZE(_ip_tlvs),
     .duplicate_tlvs = _ip_duplicate_tlvs,
     .duplicate_tlv_count = ARRAYSIZE(_ip_duplicate_tlvs),
-    .add_radio_tlvs = _radio_write_session_update,
-    .process_router = _router_process_session_update,
+    .add_radio_tlvs = _write_session_update,
+    .process_radio = _process_session_update,
+    .add_router_tlvs = _write_session_update,
+    .process_router = _process_session_update,
   },
   {
     .id = DLEP_DESTINATION_UP,
@@ -224,10 +240,11 @@ _handle_if_ip(struct dlep_session *session, struct netaddr *last_session_if_ip,
 }
 
 static int
-_radio_write_session_update(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session,
+_write_session_update(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session,
   const struct oonf_layer2_neigh_key *neigh __attribute__((unused))) {
   struct _prefix_storage *storage, *storage_it;
   struct dlep_radio_session *radio_session;
+  struct dlep_router_session *router_session;
   struct oonf_layer2_peer_address *peer_ip;
   struct oonf_layer2_net *l2net;
   struct os_interface *os_if;
@@ -239,6 +256,10 @@ _radio_write_session_update(struct dlep_extension *ext __attribute__((unused)), 
   /* announce newly added interface prefixes */
   if (l2net) {
     avl_for_each_element(&l2net->local_peer_ips, peer_ip, _net_node) {
+      if (peer_ip->origin == session->l2_default_origin
+          || peer_ip->origin == session->l2_origin) {
+        continue;
+      }
       if (avl_find(&session->_ext_ip.prefix_modification, &peer_ip->ip)) {
         /* prefix already known to session */
         continue;
@@ -259,9 +280,14 @@ _radio_write_session_update(struct dlep_extension *ext __attribute__((unused)), 
 
   /* remove missing interface prefixes */
   avl_for_each_element_safe(&session->_ext_ip.prefix_modification, storage, _node, storage_it) {
-    if (l2net && avl_find(&l2net->local_peer_ips, &storage->prefix)) {
-      /* prefix is still on interface */
-      continue;
+    if (l2net) {
+      peer_ip = oonf_layer2_net_get_local_ip(l2net, &storage->prefix);
+      if (peer_ip != NULL
+          && peer_ip->origin != session->l2_default_origin
+          && peer_ip->origin != session->l2_origin) {
+        /* prefix is still on interface */
+        continue;
+      }
     }
 
     OONF_INFO(session->log_source, "Removed prefix '%s' for session update",
@@ -284,6 +310,13 @@ _radio_write_session_update(struct dlep_extension *ext __attribute__((unused)), 
     _handle_if_ip(session, &session->_ext_ip.if_ip_v4, os_if->if_linklocal_v4, os_if->if_v4);
     _handle_if_ip(session, &session->_ext_ip.if_ip_v6, os_if->if_linklocal_v6, os_if->if_v6);
   }
+  router_session = dlep_router_get_session(session);
+  if (router_session) {
+    os_if = router_session->interface->interf.udp._if_listener.data;
+    _handle_if_ip(session, &session->_ext_ip.if_ip_v4, os_if->if_linklocal_v4, os_if->if_v4);
+    _handle_if_ip(session, &session->_ext_ip.if_ip_v6, os_if->if_linklocal_v6, os_if->if_v6);
+  }
+
   return 0;
 }
 
@@ -372,7 +405,7 @@ _process_session_ip_tlvs(
 }
 
 static enum dlep_parser_error
-_router_process_session_update(struct dlep_extension *ext __attribute((unused)), struct dlep_session *session) {
+_process_session_update(struct dlep_extension *ext __attribute((unused)), struct dlep_session *session) {
   struct oonf_layer2_net *l2net;
   struct netaddr ip;
   struct dlep_parser_value *value;

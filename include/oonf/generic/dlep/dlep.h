@@ -49,5 +49,11 @@
 /*! subsystem identifier */
 #define OONF_DLEP_SUBSYSTEM "dlep"
 
+/*! memory classes of DLEP */
+#define OONF_CLASS_DLEP_RADIO_INTERFACE  "dlep radio interface"
+#define OONF_CLASS_DLEP_RADIO_SESSION    "dlep radio session"
+#define OONF_CLASS_DLEP_ROUTER_INTERFACE "dlep router interface"
+#define OONF_CLASS_DLEP_ROUTER_SESSION   "dlep router session"
+
 #endif /* DLEP_H_ */
 

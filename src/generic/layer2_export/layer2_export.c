@@ -82,6 +82,9 @@ struct _l2export_data {
   /*! fib protocol */
   int32_t fib_protocol;
 
+  /*! bind route to fixed interface */
+  char fixed_if[IF_NAMESIZE];
+
   /*! tree of routes imported by this section */
   struct avl_tree route_tree;
 
@@ -129,7 +132,7 @@ static void _initiate_shutdown(void);
 
 static struct _l2export_data *_get_l2export(const char *name);
 static void _destroy_l2export(struct _l2export_data *);
-static bool _is_matching_route(struct oonf_layer2_neighbor_address *, struct _l2export_data *);
+static bool _is_matching_route(const struct netaddr *, const char *origin, struct _l2export_data *);
 
 static struct _l2export_route *_get_route(struct _l2export_data *data, struct os_route_key *key);
 static void _destroy_route(struct _l2export_route *route);
@@ -137,6 +140,9 @@ static void _cb_route_finished(struct os_route *route, int error);
 
 static void _cb_l2neigh_ip_added(void *);
 static void _cb_l2neigh_ip_removed(void *);
+
+static void _cb_l2net_ip_added(void *);
+static void _cb_l2net_ip_removed(void *);
 
 static void _cb_cfg_changed(void);
 
@@ -154,6 +160,8 @@ static struct cfg_schema_entry _l2export_entries[] = {
       "fib table for exported layer2 entries", 0, 1, 65535),
   CFG_MAP_INT32_MINMAX(_l2export_data, fib_protocol, "fib_protocol", "100",
       "fib protocol for exported layer2 entries", 0, 1, 255),
+  CFG_MAP_STRING_ARRAY(_l2export_data, fixed_if, "fixed_if", "",
+      "Set interface to bind all routes to", IF_NAMESIZE),
 };
 
 static struct cfg_schema_section _l2export_section = {
@@ -204,6 +212,14 @@ static struct oonf_class_extension _l2neighip_ext = {
   .cb_remove = _cb_l2neigh_ip_removed,
 };
 
+static struct oonf_class_extension _l2net_ext = {
+  .ext_name = "l2export listener",
+  .class_name = LAYER2_CLASS_NETWORK_ADDRESS,
+
+  .cb_add = _cb_l2net_ip_added,
+  .cb_remove = _cb_l2net_ip_removed,
+};
+
 /* tree of routing exporters */
 static struct avl_tree _l2export_tree;
 
@@ -219,6 +235,10 @@ _init(void) {
   if (oonf_class_extension_add(&_l2neighip_ext)) {
     return -1;
   }
+  if (oonf_class_extension_add(&_l2net_ext)) {
+    oonf_class_extension_remove(&_l2neighip_ext);
+    return -1;
+  }
   avl_init(&_l2export_tree, avl_comp_strcasecmp, false);
   avl_init(&_removal_tree, os_routing_avl_cmp_route_key, false);
   oonf_class_add(&_l2export_class);
@@ -232,7 +252,9 @@ _init(void) {
 static void
 _cleanup(void) {
   oonf_class_remove(&_l2export_class);
+  oonf_class_remove(&_route_class);
   oonf_class_extension_remove(&_l2neighip_ext);
+  oonf_class_extension_remove(&_l2net_ext);
 }
 
 /**
@@ -299,37 +321,39 @@ _destroy_l2export(struct _l2export_data *l2export) {
 }
 
 /**
-* Checks if the originator name of a l2 neighbor address matches a pattern
+* Checks if the a ip/originator pair matches the export filter
+* @param ip ip address
+* @param origin originator name
 * @param addr l2 neighbor address
 * @param pattern pattern (can end with an asterix wildcard)
 * @return true if matching, false otherwise
 */
 static bool
-_is_matching_route(struct oonf_layer2_neighbor_address *addr, struct _l2export_data *data) {
+_is_matching_route(const struct netaddr *ip, const char *origin, struct _l2export_data *data) {
   int len;
 #ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str nbuf;
 #endif
 
   /* check prefix length */
-  if (data->min_prefix_length > netaddr_get_prefix_length(&addr->ip)) {
+  if (data->min_prefix_length > netaddr_get_prefix_length(ip)) {
     OONF_DEBUG(LOG_L2EXPORT, "prefix length %u is too small (filter was %d)",
-               netaddr_get_prefix_length(&addr->ip), data->min_prefix_length);
+               netaddr_get_prefix_length(ip), data->min_prefix_length);
     return false;
   }
-  if (data->max_prefix_length < netaddr_get_prefix_length(&addr->ip)) {
+  if (data->max_prefix_length < netaddr_get_prefix_length(ip)) {
     OONF_DEBUG(LOG_L2EXPORT, "prefix length %u is too large (filter was %d)",
-               netaddr_get_prefix_length(&addr->ip), data->max_prefix_length);
+               netaddr_get_prefix_length(ip), data->max_prefix_length);
     return false;
   }
   /* check if destination matches */
-  if (!netaddr_acl_check_accept(&data->filter, &addr->ip)) {
-    OONF_DEBUG(LOG_L2EXPORT, "Bad prefix %s", netaddr_to_string(&nbuf, &addr->ip));
+  if (!netaddr_acl_check_accept(&data->filter, ip)) {
+    OONF_DEBUG(LOG_L2EXPORT, "Bad prefix %s", netaddr_to_string(&nbuf, ip));
     return false;
   }
 
   /* check if originator name is exact match */
-  if (strcmp(addr->origin->name, data->originator) == 0) {
+  if (strcmp(origin, data->originator) == 0) {
     return true;
   }
 
@@ -339,7 +363,7 @@ _is_matching_route(struct oonf_layer2_neighbor_address *addr, struct _l2export_d
     return false;
   }
 
-  return strncmp(addr->origin->name, data->originator, len-1) == 0;
+  return strncmp(origin, data->originator, len-1) == 0;
 }
 
 /**
@@ -460,8 +484,8 @@ _cb_l2neigh_ip_added(void *ptr) {
   struct _l2export_route *l2route;
   struct os_route_key rt_key;
   int8_t af;
-#ifdef OONF_LOG_DEBUG_INFO
   struct os_route_str rbuf;
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str nbuf;
 #endif
   os_routing_init_sourcespec_prefix(&rt_key, &nip->ip);
@@ -469,7 +493,7 @@ _cb_l2neigh_ip_added(void *ptr) {
   avl_for_each_element(&_l2export_tree, l2export, _node) {
     OONF_DEBUG(LOG_L2EXPORT, "Check export %s against originator %s",
                    l2export->originator, nip->origin->name);
-    if (_is_matching_route(nip, l2export)) {
+    if (_is_matching_route(&nip->ip, nip->origin->name, l2export)) {
       OONF_DEBUG(LOG_L2EXPORT, "match");
       l2route = _get_route(l2export, &rt_key);
       if (!l2route) {
@@ -486,13 +510,25 @@ _cb_l2neigh_ip_added(void *ptr) {
       memcpy(&l2route->os.p.gw, oonf_layer2_neigh_get_nexthop(nip->l2neigh, af), sizeof(struct netaddr));
       l2route->os.p.type = OS_ROUTE_UNICAST;
       l2route->os.p.metric   = l2export->fib_distance;
-      l2route->os.p.if_index = nip->l2neigh->network->if_listener.data->index;
+
       l2route->os.p.protocol = l2export->fib_protocol;
       l2route->os.p.table    = l2export->fib_table;
 
-      OONF_DEBUG(LOG_L2EXPORT, "Add route %s to fib (gw was %s)",
+      /* get interface index */
+      l2route->os.p.if_index = if_nametoindex(l2export->fixed_if);
+      if (!l2route->os.p.if_index) {
+        l2route->os.p.if_index = nip->l2neigh->network->if_listener.data->index;
+      }
+      if (!l2route->os.p.if_index) {
+        OONF_WARN(LOG_L2EXPORT, "Could not find interface for route %s",
+                  os_routing_to_string(&rbuf, &l2route->os.p));
+          continue;
+      }
+
+      OONF_DEBUG(LOG_L2EXPORT, "Add route %s to fib (gw was %s, ifindex was %u)",
           os_routing_to_string(&rbuf, &l2route->os.p),
-          netaddr_to_string(&nbuf, oonf_layer2_neigh_get_nexthop(nip->l2neigh, af)));
+          netaddr_to_string(&nbuf, oonf_layer2_neigh_get_nexthop(nip->l2neigh, af)),
+          l2route->os.p.if_index);
       if (!os_routing_set(&l2route->os, true, true)) {
         l2route->status = ROUTE_ADDING;
       }
@@ -516,7 +552,135 @@ _cb_l2neigh_ip_removed(void *ptr) {
   avl_for_each_element(&_l2export_tree, l2export, _node) {
     OONF_DEBUG(LOG_L2EXPORT, "Check export %s against originator %s",
                l2export->originator, nip->origin->name);
-    if (_is_matching_route(nip, l2export)) {
+    if (_is_matching_route(&nip->ip, nip->origin->name, l2export)) {
+      OONF_DEBUG(LOG_L2EXPORT, "match");
+      l2route = avl_find_element(&l2export->route_tree, &rt_key, l2route, _node);
+      if (l2route) {
+        OONF_DEBUG(LOG_L2EXPORT, "found entry");
+        _destroy_route(l2route);
+      }
+    }
+  }
+}
+
+/**
+* Callback triggered when a l2 network address is addrd
+* @param ptr address being added
+*/
+static void
+_cb_l2net_ip_added(void *ptr) {
+  struct oonf_layer2_peer_address *pip, *pip2;
+  struct _l2export_data *l2export;
+  struct _l2export_route *l2route;
+  struct netaddr next_v4, next_v6;
+  const struct netaddr *next;
+  struct os_route_key rt_key;
+  int8_t af;
+  struct os_route_str rbuf;
+#ifdef OONF_LOG_DEBUG_INFO
+  struct netaddr_str nbuf;
+#endif
+  pip = ptr;
+  os_routing_init_sourcespec_prefix(&rt_key, &pip->ip);
+
+  netaddr_invalidate(&next_v4);
+  netaddr_invalidate(&next_v6);
+
+  avl_for_each_element(&pip->l2net->local_peer_ips, pip2, _net_node) {
+    if (netaddr_get_prefix_length(&pip2->ip) == netaddr_get_maxprefix(&pip2->ip)) {
+      switch (netaddr_get_address_family(&pip2->ip)) {
+        case AF_INET:
+          memcpy(&next_v4, &pip2->ip, sizeof(next_v4));
+          break;
+        case AF_INET6:
+          memcpy(&next_v6, &pip2->ip, sizeof(next_v6));
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  avl_for_each_element(&_l2export_tree, l2export, _node) {
+    OONF_DEBUG(LOG_L2EXPORT, "Check export %s against originator %s",
+                   l2export->originator, pip->origin->name);
+    if (_is_matching_route(&pip->ip, pip->origin->name, l2export)) {
+      OONF_DEBUG(LOG_L2EXPORT, "match");
+      l2route = _get_route(l2export, &rt_key);
+      if (!l2route) {
+        continue;
+      }
+
+      OONF_DEBUG(LOG_L2EXPORT, "got entry");
+
+      // TODO: what if this route is not in state "nothing" ?
+      af = netaddr_get_address_family(&pip->ip);
+
+      /* getnext hop */
+      switch (af) {
+        case AF_INET:
+          next = &next_v4;
+          break;
+        case AF_INET6:
+          next = &next_v6;
+          break;
+        default:
+          next = &NETADDR_UNSPEC;
+          break;
+      }
+      if (netaddr_is_unspec(next)) {
+        /* no next hop */
+        continue;
+      }
+
+      /* set route parameters */
+      l2route->os.p.family = af;
+
+      memcpy(&l2route->os.p.gw, next, sizeof(struct netaddr));
+      l2route->os.p.type = OS_ROUTE_UNICAST;
+      l2route->os.p.metric   = l2export->fib_distance;
+      l2route->os.p.protocol = l2export->fib_protocol;
+      l2route->os.p.table    = l2export->fib_table;
+
+      /* get interface index */
+      l2route->os.p.if_index = if_nametoindex(l2export->fixed_if);
+      if (!l2route->os.p.if_index) {
+        l2route->os.p.if_index = pip->l2net->if_listener.data->index;
+      }
+      if (!l2route->os.p.if_index) {
+        OONF_WARN(LOG_L2EXPORT, "Could not find interface for route %s",
+                  os_routing_to_string(&rbuf, &l2route->os.p));
+          continue;
+      }
+
+      OONF_DEBUG(LOG_L2EXPORT, "Add route %s to fib (gw was %s, ifindex was %u)",
+          os_routing_to_string(&rbuf, &l2route->os.p),
+          netaddr_to_string(&nbuf, next),
+          l2route->os.p.if_index);
+      if (!os_routing_set(&l2route->os, true, true)) {
+        l2route->status = ROUTE_ADDING;
+      }
+    }
+  }
+}
+
+/**
+* Callback triggered when a l2 network address is removed
+* @param ptr address being removed
+*/
+static void
+_cb_l2net_ip_removed(void *ptr) {
+  struct oonf_layer2_neighbor_address *nip = ptr;
+  struct _l2export_data *l2export;
+  struct _l2export_route *l2route;
+  struct os_route_key rt_key;
+
+  os_routing_init_sourcespec_prefix(&rt_key, &nip->ip);
+
+  avl_for_each_element(&_l2export_tree, l2export, _node) {
+    OONF_DEBUG(LOG_L2EXPORT, "Check export %s against originator %s",
+               l2export->originator, nip->origin->name);
+    if (_is_matching_route(&nip->ip, nip->origin->name, l2export)) {
       OONF_DEBUG(LOG_L2EXPORT, "match");
       l2route = avl_find_element(&l2export->route_tree, &rt_key, l2route, _node);
       if (l2route) {

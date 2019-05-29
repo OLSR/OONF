@@ -90,9 +90,17 @@ struct dlep_router_session {
 void dlep_router_session_init(void);
 void dlep_router_session_cleanup(void);
 
-struct dlep_router_session *dlep_router_get_session(struct dlep_router_if *interf, union netaddr_socket *remote);
+struct dlep_router_session *dlep_router_get_if_session(struct dlep_router_if *interf, union netaddr_socket *remote);
 struct dlep_router_session *dlep_router_add_session(struct dlep_router_if *interf,
     union netaddr_socket *local, union netaddr_socket *remote);
 void dlep_router_remove_session(struct dlep_router_session *);
+
+static INLINE struct dlep_router_session *
+dlep_router_get_session(struct dlep_session *session) {
+  if (session->radio) {
+    return NULL;
+  }
+  return container_of(session, struct dlep_router_session, session);
+}
 
 #endif /* DLEP_ROUTER_SESSION_H_ */

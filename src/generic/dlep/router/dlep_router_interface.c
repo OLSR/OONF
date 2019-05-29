@@ -84,25 +84,11 @@ static int _connect_to_if_changed(struct os_interface_listener *);
 static void _cb_check_connect_to_status(struct oonf_timer_instance *);
 
 static struct oonf_class _router_if_class = {
-  .name = "DLEP router interface",
+  .name = OONF_CLASS_DLEP_ROUTER_INTERFACE,
   .size = sizeof(struct dlep_router_if),
 };
 
 static bool _shutting_down;
-
-#if 0
-static struct oonf_layer2_origin _l2_origin = {
-  .name = "dlep_router",
-  .proactive = true,
-  .priority = OONF_LAYER2_ORIGIN_RELIABLE,
-};
-
-static struct oonf_layer2_origin _l2_default_origin = {
-  .name = "dlep_router_defaults",
-  .proactive = false,
-  .priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
-};
-#endif
 
 static struct oonf_timer_class _connect_to_watchdog_class = {
   .name = "connect_to watchdog",
@@ -125,11 +111,6 @@ dlep_router_interface_init(void) {
 
   _shutting_down = false;
 
-#if 0
-  oonf_layer2_origin_add(&_l2_origin);
-  oonf_layer2_origin_add(&_l2_default_origin);
-#endif
-
   oonf_timer_add(&_connect_to_watchdog_class);
 }
 
@@ -148,10 +129,6 @@ dlep_router_interface_cleanup(void) {
   oonf_class_remove(&_router_if_class);
 
   dlep_router_session_cleanup();
-#if 0
-  oonf_layer2_origin_remove(&_l2_origin);
-  oonf_layer2_origin_remove(&_l2_default_origin);
-#endif
   oonf_timer_remove(&_connect_to_watchdog_class);
 }
 
@@ -349,7 +326,7 @@ _check_connect_to(struct dlep_router_if *router_if) {
     return;
   }
 
-  connect_to_session = dlep_router_get_session(router_if, &router_if->connect_to);
+  connect_to_session = dlep_router_get_if_session(router_if, &router_if->connect_to);
   if (connect_to_session != NULL
     && (connect_to_session->session._peer_state == DLEP_PEER_NOT_CONNECTED
     || connect_to_session->session._peer_state == DLEP_PEER_TERMINATED)) {

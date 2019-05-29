@@ -93,12 +93,10 @@ static const uint16_t _session_initack_mandatory[] = {
 
 /* peer update */
 static const uint16_t _peer_update_tlvs[] = {
-  DLEP_IPV4_ADDRESS_TLV,
-  DLEP_IPV6_ADDRESS_TLV,
+  DLEP_STATUS_TLV,
 };
 static const uint16_t _peer_update_duplicates[] = {
-  DLEP_IPV4_ADDRESS_TLV,
-  DLEP_IPV6_ADDRESS_TLV,
+  DLEP_STATUS_TLV,
 };
 
 /* peer update ack */
@@ -122,19 +120,9 @@ static const uint16_t _peer_terminationack_tlvs[] = {
 /* destination up */
 static const uint16_t _dst_up_tlvs[] = {
   DLEP_MAC_ADDRESS_TLV,
-  DLEP_IPV4_ADDRESS_TLV,
-  DLEP_IPV6_ADDRESS_TLV,
-  DLEP_IPV4_SUBNET_TLV,
-  DLEP_IPV6_SUBNET_TLV,
 };
 static const uint16_t _dst_up_mandatory[] = {
   DLEP_MAC_ADDRESS_TLV,
-};
-static const uint16_t _dst_up_duplicates[] = {
-  DLEP_IPV4_ADDRESS_TLV,
-  DLEP_IPV6_ADDRESS_TLV,
-  DLEP_IPV4_SUBNET_TLV,
-  DLEP_IPV6_SUBNET_TLV,
 };
 
 /* destination up ack */
@@ -168,27 +156,14 @@ static const uint16_t _dst_down_ack_mandatory[] = {
 /* destination update */
 static const uint16_t _dst_update_tlvs[] = {
   DLEP_MAC_ADDRESS_TLV,
-  DLEP_IPV4_ADDRESS_TLV,
-  DLEP_IPV6_ADDRESS_TLV,
-  DLEP_IPV4_SUBNET_TLV,
-  DLEP_IPV6_SUBNET_TLV,
 };
 static const uint16_t _dst_update_mandatory[] = {
   DLEP_MAC_ADDRESS_TLV,
-};
-static const uint16_t _dst_update_duplicates[] = {
-  DLEP_IPV4_ADDRESS_TLV,
-  DLEP_IPV6_ADDRESS_TLV,
-  DLEP_IPV4_SUBNET_TLV,
-  DLEP_IPV6_SUBNET_TLV,
 };
 
 /* link characteristics request */
 static const uint16_t _linkchar_req_tlvs[] = {
   DLEP_MAC_ADDRESS_TLV,
-  DLEP_CDRR_TLV,
-  DLEP_CDRT_TLV,
-  DLEP_LATENCY_TLV,
 };
 static const uint16_t _linkchar_req_mandatory[] = {
   DLEP_MAC_ADDRESS_TLV,
@@ -197,14 +172,6 @@ static const uint16_t _linkchar_req_mandatory[] = {
 /* link characteristics ack */
 static const uint16_t _linkchar_ack_tlvs[] = {
   DLEP_MAC_ADDRESS_TLV,
-  DLEP_MDRR_TLV,
-  DLEP_MDRT_TLV,
-  DLEP_CDRR_TLV,
-  DLEP_CDRT_TLV,
-  DLEP_LATENCY_TLV,
-  DLEP_RESOURCES_TLV,
-  DLEP_RLQR_TLV,
-  DLEP_RLQT_TLV,
   DLEP_STATUS_TLV,
 };
 static const uint16_t _linkchar_ack_mandatory[] = {
@@ -265,8 +232,6 @@ static struct dlep_extension_signal _signals[] = {
     .supported_tlv_count = ARRAYSIZE(_dst_up_tlvs),
     .mandatory_tlvs = _dst_up_mandatory,
     .mandatory_tlv_count = ARRAYSIZE(_dst_up_mandatory),
-    .duplicate_tlvs = _dst_up_duplicates,
-    .duplicate_tlv_count = ARRAYSIZE(_dst_up_duplicates),
   },
   {
     .id = DLEP_DESTINATION_UP_ACK,
@@ -295,8 +260,6 @@ static struct dlep_extension_signal _signals[] = {
     .supported_tlv_count = ARRAYSIZE(_dst_update_tlvs),
     .mandatory_tlvs = _dst_update_mandatory,
     .mandatory_tlv_count = ARRAYSIZE(_dst_update_mandatory),
-    .duplicate_tlvs = _dst_update_duplicates,
-    .duplicate_tlv_count = ARRAYSIZE(_dst_update_duplicates),
   },
   {
     .id = DLEP_HEARTBEAT,
@@ -561,6 +524,62 @@ dlep_base_proto_write_mac_only(
     return -1;
   }
   return 0;
+}
+
+/**
+ * Process the peer update message
+ * @param ext (this) dlep extension
+ * @param session dlep session
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+dlep_base_proto_process_session_update(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
+  struct oonf_layer2_net *l2net;
+  int result;
+
+  l2net = oonf_layer2_net_add(session->l2_listener.name);
+  if (!l2net) {
+    return DLEP_NEW_PARSER_OUT_OF_MEMORY;
+  }
+
+  if (!session->radio) {
+    /* metric data is only transported radio to router */
+    result = dlep_reader_map_l2neigh_data(l2net->neighdata, session, &_base_proto);
+    if (result) {
+      OONF_INFO(session->log_source, "tlv mapping failed for extension %u: %u", ext->id, result);
+      return DLEP_NEW_PARSER_INTERNAL_ERROR;
+    }
+  }
+
+  /* generate ACK */
+  if (dlep_session_generate_signal_status(session, DLEP_SESSION_UPDATE_ACK, NULL, DLEP_STATUS_OKAY, "Success")) {
+    return DLEP_NEW_PARSER_INTERNAL_ERROR;
+  }
+  dlep_base_proto_print_status(session);
+  return DLEP_NEW_PARSER_OKAY;
+}
+
+/**
+ * Process the peer update ack message
+ * @param ext (this) dlep extension
+ * @param session dlep session
+ * @return always 0
+ */
+int
+dlep_base_proto_process_session_update_ack(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
+  dlep_base_proto_print_status(session);
+  if (session->_peer_state == DLEP_PEER_SEND_UPDATE) {
+    if (dlep_session_generate_signal(session, DLEP_SESSION_UPDATE, NULL)) {
+      // TODO: do we need to terminate here?
+      return DLEP_NEW_PARSER_INTERNAL_ERROR;
+    }
+    session->_peer_state = DLEP_PEER_WAIT_FOR_UPDATE_ACK;
+  }
+  else {
+    session->_peer_state = DLEP_PEER_IDLE;
+  }
+  dlep_base_proto_print_status(session);
+  return DLEP_NEW_PARSER_OKAY;
 }
 
 /**

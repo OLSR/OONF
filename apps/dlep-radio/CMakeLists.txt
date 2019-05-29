@@ -48,6 +48,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              remotecontrol
                              layer2_config
                              layer2_import
+                             layer2_export
                              dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)

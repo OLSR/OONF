@@ -75,25 +75,11 @@ static void _cleanup_interface(struct dlep_radio_if *interface);
 
 /* DLEP interfaces */
 static struct oonf_class _interface_class = {
-  .name = "DLEP radio interface",
+  .name = OONF_CLASS_DLEP_RADIO_INTERFACE,
   .size = sizeof(struct dlep_radio_if),
 };
 
 static bool _shutting_down;
-
-#if 0
-static struct oonf_layer2_origin _l2_origin = {
-  .name = "dlep_radio",
-  .proactive = true,
-  .priority = OONF_LAYER2_ORIGIN_RELIABLE,
-};
-
-static struct oonf_layer2_origin _l2_default_origin = {
-  .name = "dlep_radio_defaults",
-  .proactive = false,
-  .priority = OONF_LAYER2_ORIGIN_DEFAULT,
-};
-#endif
 
 /**
  * Initialize everything for dlep radio interfaces. This function also
@@ -125,10 +111,6 @@ dlep_radio_interface_cleanup(void) {
 
   oonf_class_remove(&_interface_class);
   dlep_radio_session_cleanup();
-#if 0
-  oonf_layer2_origin_remove(&_l2_origin);
-  oonf_layer2_origin_remove(&_l2_default_origin);
-#endif
 }
 
 /**
