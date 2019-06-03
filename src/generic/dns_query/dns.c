@@ -30,6 +30,7 @@
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 #pragma GCC diagnostic ignored "-Wstrict-prototypes"
 #pragma GCC diagnostic ignored "-Wjump-misses-init"
+#pragma GCC diagnostic ignored "-Warray-bounds"
 
 #if !defined(__FreeBSD__) && !defined(__sun)
 #ifndef _XOPEN_SOURCE

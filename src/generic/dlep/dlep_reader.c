@@ -591,6 +591,7 @@ dlep_reader_map_identity(struct oonf_layer2_data *data, const struct oonf_layer2
   }
 
   dlepvalue = dlep_parser_get_tlv_binary(&session->parser, value);
+  l2value = 0;
 
   if (meta->type == OONF_LAYER2_INTEGER_DATA || meta->type == OONF_LAYER2_BOOLEAN_DATA) {
     switch (value->length) {
