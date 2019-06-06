@@ -408,7 +408,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
     if (import->rttype != route->p.type) {
       OONF_DEBUG(LOG_L2_IMPORT, "Bad routing type %u (filter was %d)",
                  route->p.type, import->rttype);
-      return;
+      continue;
     }
 
     /* check prefix length */
@@ -477,7 +477,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
     }
     if (!l2net) {
       OONF_DEBUG(LOG_L2_IMPORT, "No l2 network '%s' found", l2ifname);
-      return;
+      continue;
     }
 
     mac = NULL;
@@ -497,7 +497,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
       if (!oonf_timer_is_active(&_route_reload_instance)) {
         oonf_timer_set(&_route_reload_instance, 1000);
       }
-      return;
+      continue;
     }
 
     dst = &route->p.key.dst;
@@ -517,7 +517,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
       l2neigh = oonf_layer2_neigh_add_lid(l2net, &nb_key);
       if (!l2neigh) {
         OONF_DEBUG(LOG_L2_IMPORT, "No l2 neighbor found");
-        return;
+        continue;
       }
 
       OONF_DEBUG(LOG_L2_IMPORT, "Import layer2 neighbor...");
@@ -545,7 +545,6 @@ _cb_rt_event(const struct os_route *route, bool set) {
 static struct _import_entry *
 _get_import(const char *name) {
   struct _import_entry *import;
-
   import = avl_find_element(&_import_tree, name, import, _node);
   if (import) {
     return import;
