@@ -69,6 +69,7 @@ static void _remove_mpr(struct nhdp_domain *);
 static void _cb_update_everyone_routing_mpr(struct nhdp_domain *domain);
 static void _cb_update_everyone_flooding_mpr(struct nhdp_domain *domain);
 
+static bool _recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bool trigger, bool force);
 static bool _recalculate_neighbor_metric(struct nhdp_domain *domain, struct nhdp_neighbor *neigh);
 static bool _recalculate_routing_mpr_set(struct nhdp_domain *domain);
 static bool _recalculate_flooding_mpr_set(void);
@@ -485,10 +486,13 @@ nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *domain, struct nhdp_l2hop
 /**
  * This will trigger a metric recalculation
  * @param domain NHDP domain of metric change, NULL for all domains
+ * @param trigger true to trigger listener, false otherwise
+ * @param force true to trigger a metric change regardless of values, false to
+ *   check for change
  * return true if metric changed, false otherwise
  */
 static bool
-_recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bool trigger) {
+_recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bool trigger, bool force) {
   struct nhdp_domain_listener *listener;
   bool changed_metric;
 
@@ -500,7 +504,7 @@ _recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bo
 
   if (!domain) {
     list_for_each_element(&_domain_list, domain, _node) {
-      changed_metric |= _recalculate_metrics(domain, neigh, false);
+      changed_metric |= _recalculate_metrics(domain, neigh, false, force);
     }
     domain = NULL;
   }
@@ -513,7 +517,7 @@ _recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bo
     changed_metric |= _recalculate_neighbor_metric(domain, neigh);
   }
 
-  if (trigger && changed_metric) {
+  if (trigger && (changed_metric || force)) {
     list_for_each_element(&_domain_listener_list, listener, _node) {
       /* trigger domain listeners */
       if (listener->metric_update) {
@@ -530,8 +534,9 @@ _recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bo
 }
 
 bool
-nhdp_domain_recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh) {
-  return _recalculate_metrics(domain, neigh, true);
+nhdp_domain_recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh,
+  bool force) {
+  return _recalculate_metrics(domain, neigh, true, force);
 }
 
 static void

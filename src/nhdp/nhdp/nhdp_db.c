@@ -848,7 +848,7 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
   if (old_status != lnk->status) {
     /* link status was changed */
     lnk->last_status_change = oonf_clock_getNow();
-    nhdp_domain_recalculate_metrics(NULL, lnk->neigh);
+    nhdp_domain_recalculate_metrics(NULL, lnk->neigh, true);
     nhdp_domain_delayed_mpr_recalculation(NULL, lnk->neigh);
 
     /* trigger change event */

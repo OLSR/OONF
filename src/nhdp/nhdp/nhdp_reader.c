@@ -983,7 +983,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   nhdp_db_link_update_status(_current.link);
 
   /* update link metrics and MPR */
-  nhdp_domain_recalculate_metrics(NULL, _current.neighbor);
+  nhdp_domain_recalculate_metrics(NULL, _current.neighbor, false);
   nhdp_domain_delayed_mpr_recalculation(NULL, _current.neighbor);
 
   return RFC5444_OKAY;
