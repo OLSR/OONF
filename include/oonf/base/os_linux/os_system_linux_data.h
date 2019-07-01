@@ -127,10 +127,16 @@ struct os_system_netlink {
   const char *name;
 
   /* list of multicast groups this handler requires */
-  const uint32_t *multicast;
-  
+  const uint32_t *multicast_groups;
+
   /*! number of multicast groups this handler requires */
-  size_t multicast_count;
+  size_t multicast_group_count;
+
+  /* list of multicast groups this handler requires */
+  const uint32_t *multicast_messages;
+
+  /*! number of multicast groups this handler requires */
+  size_t multicast_message_count;
 
   /* reference to os system netlink multiplexer */
   struct os_system_netlink_socket *nl_socket;

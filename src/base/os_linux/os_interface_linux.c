@@ -155,13 +155,17 @@ static struct oonf_subsystem _oonf_os_interface_subsystem = {
 };
 DECLARE_OONF_PLUGIN(_oonf_os_interface_subsystem);
 
-static const uint32_t _rtnetlink_mcast[] = { RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR };
+static const uint32_t _rtnetlink_mcast_groups[] = { RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR };
+static const uint32_t _rtnetlink_mcast_messages[] = { RTM_NEWLINK, RTM_NEWADDR, RTM_DELLINK, RTM_DELADDR };
 
 static struct os_system_netlink _rtnetlink_handler = {
   .name = "interface",
-  .multicast = _rtnetlink_mcast,
-  .multicast_count = ARRAYSIZE(_rtnetlink_mcast),
-  
+
+  .multicast_groups = _rtnetlink_mcast_groups,
+  .multicast_group_count = ARRAYSIZE(_rtnetlink_mcast_groups),
+  .multicast_messages = _rtnetlink_mcast_messages,
+  .multicast_message_count = ARRAYSIZE(_rtnetlink_mcast_messages),
+
   .used_by = &_oonf_os_interface_subsystem,
   .cb_response = _cb_rtnetlink_response,
   .cb_multicast = _cb_rtnetlink_multicast,

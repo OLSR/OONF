@@ -109,14 +109,17 @@ static struct route_type_translation _type_translation[] = { { OS_ROUTE_UNICAST,
   { OS_ROUTE_BLACKHOLE, RTN_BLACKHOLE }, { OS_ROUTE_NAT, RTN_NAT } };
 
 /* netlink socket for route set/get commands */
-static const uint32_t _rtnetlink_mcast[] = { RTNLGRP_IPV4_ROUTE, RTNLGRP_IPV6_ROUTE };
+static const uint32_t _rtnetlink_mcast_groups[] = { RTNLGRP_IPV4_ROUTE, RTNLGRP_IPV6_ROUTE };
+static const uint32_t _rtnetlink_mcast_messages[] = { RTM_NEWROUTE, RTM_DELROUTE };
 
 static struct os_system_netlink _rtnetlink_handler = {
   .name = "routing send",
   .used_by = &_oonf_os_routing_subsystem,
   
-  .multicast = &_rtnetlink_mcast[0],
-  .multicast_count = ARRAYSIZE(_rtnetlink_mcast),
+  .multicast_groups = &_rtnetlink_mcast_groups[0],
+  .multicast_group_count = ARRAYSIZE(_rtnetlink_mcast_groups),
+  .multicast_messages = &_rtnetlink_mcast_messages[0],
+  .multicast_message_count = ARRAYSIZE(_rtnetlink_mcast_messages),
 
   .cb_response = _cb_rtnetlink_response,
   .cb_multicast = _cb_rtnetlink_multicast,

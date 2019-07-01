@@ -312,11 +312,11 @@ os_system_linux_netlink_add(struct os_system_netlink *nl, int protocol) {
     return -1;
   }
   
-  for (i = 0; i < nl->multicast_count; i++) {
+  for (i = 0; i < nl->multicast_group_count; i++) {
     if (setsockopt(os_fd_get_fd(&nl->nl_socket->nl_socket.fd),
-        SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, &nl->multicast[i], sizeof(nl->multicast[i]))) {
+        SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, &nl->multicast_groups[i], sizeof(nl->multicast_groups[i]))) {
       OONF_WARN(nl->used_by->logging, "Netlink '%s': could not join mc group: %d", 
-                nl->name, nl->multicast[i]);
+                nl->name, nl->multicast_groups[i]);
       return -1;
     }
   }
@@ -792,8 +792,8 @@ netlink_rcv_retry:
         else {
           /* this seems to be multicast */
           list_for_each_element(&nl_socket->handlers, nl_handler, _node) {
-            for (i=0; i<nl_handler->multicast_count; i++) {
-              if (nl_handler->multicast[i] == nh->nlmsg_type) {
+            for (i=0; i<nl_handler->multicast_message_count; i++) {
+              if (nl_handler->multicast_messages[i] == nh->nlmsg_type) {
                 nl_handler->cb_multicast(nl_handler, nh);
                 break;
               }
