@@ -74,12 +74,12 @@ static enum oonf_telnet_result _cb_olsrv2info(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _cb_olsrv2info_help(struct oonf_telnet_data *con);
 
 static void _initialize_originator_values(int af_type);
-static void _initialize_old_originator_values(struct olsrv2_originator_set_entry *);
+static void _initialize_old_originator_values(struct olsrv2_originator_set_entry *, bool raw);
 static void _initialize_domain_values(struct nhdp_domain *domain);
 static void _initialize_domain_link_metric_values(struct nhdp_domain *domain, uint32_t);
 static void _initialize_domain_distance(uint8_t);
 static void _initialize_lan_values(struct olsrv2_lan_entry *);
-static void _initialize_node_values(struct olsrv2_tc_node *);
+static void _initialize_node_values(struct olsrv2_tc_node *, bool raw);
 static void _initialize_attached_network_values(struct olsrv2_tc_attachment *edge);
 static void _initialize_edge_values(struct olsrv2_tc_edge *edge);
 static void _initialize_route_values(struct olsrv2_routing_entry *route);
@@ -466,10 +466,10 @@ _initialize_originator_values(int af_type) {
  * @param entry originator set entry
  */
 static void
-_initialize_old_originator_values(struct olsrv2_originator_set_entry *entry) {
+_initialize_old_originator_values(struct olsrv2_originator_set_entry *entry, bool raw) {
   netaddr_to_string(&_value_old_originator, &entry->originator);
 
-  oonf_timer_to_string(&_value_old_originator_vtime, &entry->_vtime);
+  oonf_timer_to_string_ext(&_value_old_originator_vtime, &entry->_vtime, raw);
 }
 
 /**
@@ -539,10 +539,10 @@ _initialize_lan_values(struct olsrv2_lan_entry *lan) {
  * @param node OLSRv2 node
  */
 static void
-_initialize_node_values(struct olsrv2_tc_node *node) {
+_initialize_node_values(struct olsrv2_tc_node *node, bool raw) {
   netaddr_to_string(&_value_node, &node->target.prefix.dst);
 
-  oonf_timer_to_string(&_value_node_vtime, &node->_validity_time);
+  oonf_timer_to_string_ext(&_value_node_vtime, &node->_validity_time, raw);
 
   snprintf(_value_node_ansn, sizeof(_value_node_ansn), "%u", node->ansn);
 
@@ -604,7 +604,7 @@ _cb_create_text_old_originator(struct oonf_viewer_template *template) {
   struct olsrv2_originator_set_entry *entry;
 
   avl_for_each_element(olsrv2_originator_get_tree(), entry, _node) {
-    _initialize_old_originator_values(entry);
+    _initialize_old_originator_values(entry, template->create_raw);
 
     /* generate template output */
     oonf_viewer_output_print_line(template);
@@ -666,7 +666,7 @@ _cb_create_text_node(struct oonf_viewer_template *template) {
   struct olsrv2_tc_node *node;
 
   avl_for_each_element(olsrv2_tc_get_tree(), node, _originator_node) {
-    _initialize_node_values(node);
+    _initialize_node_values(node, template->create_raw);
 
     oonf_viewer_output_print_line(template);
   }
@@ -685,7 +685,7 @@ _cb_create_text_attached_network(struct oonf_viewer_template *template) {
   struct nhdp_domain *domain;
 
   avl_for_each_element(olsrv2_tc_get_tree(), node, _originator_node) {
-    _initialize_node_values(node);
+    _initialize_node_values(node, template->create_raw);
 
     if (olsrv2_tc_is_node_virtual(node)) {
       continue;
@@ -719,7 +719,7 @@ _cb_create_text_edge(struct oonf_viewer_template *template) {
   uint32_t metric;
 
   avl_for_each_element(olsrv2_tc_get_tree(), node, _originator_node) {
-    _initialize_node_values(node);
+    _initialize_node_values(node, template->create_raw);
 
     if (olsrv2_tc_is_node_virtual(node)) {
       continue;

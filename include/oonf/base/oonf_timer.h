@@ -168,17 +168,30 @@ oonf_timer_get_due(const struct oonf_timer_instance *timer) {
  * or "-1" if it has already fired.
  * @param buf target buffer
  * @param timer timer
+ * @param raw true to get raw time values, false to use ISO prefixes
  * @return pointer to string representation
  */
 static INLINE const char *
-oonf_timer_to_string(struct isonumber_str *buf, struct oonf_timer_instance *timer) {
+oonf_timer_to_string_ext(struct isonumber_str *buf, struct oonf_timer_instance *timer, bool raw) {
   static const char NONE[] = "-1";
   if (!oonf_timer_is_active(timer)) {
     return NONE;
   }
   else {
-    return oonf_clock_toIntervalString(buf, oonf_timer_get_due(timer));
+    return oonf_clock_toIntervalString_ext(buf, oonf_timer_get_due(timer), raw);
   }
+}
+
+/**
+ * Puts the number of seconds until the timer fires into the output buffer,
+ * or "-1" if it has already fired.
+ * @param buf target buffer
+ * @param timer timer
+ * @return pointer to string representation
+ */
+static INLINE const char *
+oonf_timer_to_string(struct isonumber_str *buf, struct oonf_timer_instance *timer) {
+  return oonf_timer_to_string_ext(buf, timer, false);
 }
 
 /**

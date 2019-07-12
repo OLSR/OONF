@@ -71,7 +71,7 @@ static enum oonf_telnet_result _cb_nhdpinfo_help(struct oonf_telnet_data *con);
 
 static void _initialize_interface_values(struct nhdp_interface *nhdp_if);
 static void _initialize_interface_address_values(struct nhdp_interface_addr *if_addr);
-static void _initialize_nhdp_link_values(struct nhdp_link *lnk);
+static void _initialize_nhdp_link_values(struct nhdp_link *lnk, bool raw);
 static void _initialize_nhdp_domain_metric_values(struct nhdp_domain *domain, struct nhdp_metric *metric);
 static void _initialize_nhdp_neighbor_mpr_values(
   struct nhdp_domain *domain, struct nhdp_neighbor_domaindata *domaindata);
@@ -309,8 +309,8 @@ static struct abuf_template_data_entry _tde_link_key[] = {
 
 static struct abuf_template_data_entry _tde_link[] = {
   { KEY_LINK_BINDTO, _value_link_bindto.buf, true },
-  { KEY_LINK_VTIME_VALUE, _value_link_vtime_value.buf, false },
-  { KEY_LINK_ITIME_VALUE, _value_link_itime_value.buf, false },
+  { KEY_LINK_VTIME_VALUE, _value_link_vtime_value.buf, true },
+  { KEY_LINK_ITIME_VALUE, _value_link_itime_value.buf, true },
   { KEY_LINK_SYMTIME, _value_link_symtime.buf, false },
   { KEY_LINK_HEARDTIME, _value_link_heardtime.buf, false },
   { KEY_LINK_VTIME, _value_link_vtime.buf, false },
@@ -572,15 +572,15 @@ _initialize_interface_address_values(struct nhdp_interface_addr *if_addr) {
  * @param lnk NHDP link
  */
 static void
-_initialize_nhdp_link_values(struct nhdp_link *lnk) {
+_initialize_nhdp_link_values(struct nhdp_link *lnk, bool raw) {
   netaddr_to_string(&_value_link_bindto, &lnk->if_addr);
 
-  oonf_clock_toIntervalString(&_value_link_vtime_value, lnk->vtime_value);
-  oonf_clock_toIntervalString(&_value_link_itime_value, lnk->itime_value);
+  oonf_clock_toIntervalString_ext(&_value_link_vtime_value, lnk->vtime_value, raw);
+  oonf_clock_toIntervalString_ext(&_value_link_itime_value, lnk->itime_value, raw);
 
-  oonf_timer_to_string(&_value_link_symtime, &lnk->sym_time);
-  oonf_timer_to_string(&_value_link_heardtime, &lnk->heard_time);
-  oonf_timer_to_string(&_value_link_vtime, &lnk->vtime);
+  oonf_timer_to_string_ext(&_value_link_symtime, &lnk->sym_time, raw);
+  oonf_timer_to_string_ext(&_value_link_heardtime, &lnk->heard_time, raw);
+  oonf_timer_to_string_ext(&_value_link_vtime, &lnk->vtime, raw);
 
   strscpy(_value_link_status, nhdp_db_link_status_to_string(lnk), sizeof(_value_link_status));
 
@@ -750,7 +750,7 @@ _cb_create_text_link(struct oonf_viewer_template *template) {
     _initialize_interface_values(nhdp_if);
 
     list_for_each_element(&nhdp_if->_links, nlink, _if_node) {
-      _initialize_nhdp_link_values(nlink);
+      _initialize_nhdp_link_values(nlink, template->create_raw);
       _initialize_nhdp_neighbor_values(nlink->neigh);
 
       list_for_each_element(nhdp_domain_get_list(), domain, _node) {
@@ -781,7 +781,7 @@ _cb_create_text_link_address(struct oonf_viewer_template *template) {
     _initialize_interface_values(nhdpif);
 
     list_for_each_element(&nhdpif->_links, nhdplink, _if_node) {
-      _initialize_nhdp_link_values(nhdplink);
+      _initialize_nhdp_link_values(nhdplink, template->create_raw);
       _initialize_nhdp_neighbor_values(nhdplink->neigh);
 
       avl_for_each_element(&nhdplink->_addresses, laddr, _link_node) {
@@ -812,7 +812,7 @@ _cb_create_text_link_twohop(struct oonf_viewer_template *template) {
     _initialize_interface_values(nhdpif);
 
     list_for_each_element(&nhdpif->_links, nhdplink, _if_node) {
-      _initialize_nhdp_link_values(nhdplink);
+      _initialize_nhdp_link_values(nhdplink, template->create_raw);
       _initialize_nhdp_neighbor_values(nhdplink->neigh);
 
       avl_for_each_element(&nhdplink->_2hop, twohop, _link_node) {
