@@ -55,6 +55,10 @@
 /* Definitions */
 #define LOG_CLASS (_oonf_class_subsystem.logging)
 
+struct _class_config {
+  bool debug;
+};
+
 /* prototypes */
 static int _init(void);
 static void _cleanup(void);
@@ -62,6 +66,8 @@ static void _cleanup(void);
 static void _free_freelist(struct oonf_class *);
 static size_t _roundup(size_t);
 static const char *_cb_to_keystring(struct oonf_objectkey_str *, struct oonf_class *, void *);
+
+static void _cb_cfg_class_changed(void);
 
 /* list of memory cookies */
 static struct avl_tree _classes_tree;
@@ -73,13 +79,36 @@ static const char *OONF_CLASS_EVENT_NAME[] = {
   [OONF_OBJECT_CHANGED] = "changed",
 };
 
+static struct cfg_schema_entry _class_entries[] = {
+  CFG_MAP_BOOL(
+    _class_config, debug, "debug", "false", "True to enable additional debugging code for memory allocation"
+  )
+};
+
+static struct cfg_schema_section _class_section = {
+  .type = OONF_CLASS_SUBSYSTEM,
+  .mode = CFG_SSMODE_UNNAMED,
+
+  .cb_delta_handler = _cb_cfg_class_changed,
+  .entries = _class_entries,
+  .entry_count = ARRAYSIZE(_class_entries),
+};
+
+
 /* subsystem definition */
 static struct oonf_subsystem _oonf_class_subsystem = {
   .name = OONF_CLASS_SUBSYSTEM,
   .init = _init,
   .cleanup = _cleanup,
+  .cfg_section = &_class_section,
 };
 DECLARE_OONF_PLUGIN(_oonf_class_subsystem);
+
+/* debug configuration */
+static struct _class_config _config;
+static uint32_t _next_debug_id = 1;
+static const size_t _debug_size =
+    sizeof(struct oonf_class_guard_prefix) + sizeof(struct oonf_class_guard_suffix);
 
 /**
  * Initialize the class system
@@ -128,7 +157,12 @@ oonf_class_add(struct oonf_class *ci) {
   list_init_head(&ci->_free_list);
   list_init_head(&ci->_extensions);
 
-  OONF_DEBUG(LOG_CLASS, "Class %s added: %" PRINTF_SIZE_T_SPECIFIER " bytes\n", ci->name, ci->total_size);
+  /* debug settings */
+  ci->debug = _config.debug;
+
+  oonf_class_guard_add(&ci->class_guard);
+
+  OONF_DEBUG(LOG_CLASS, "Class %s (id=%u) added: %" PRINTF_SIZE_T_SPECIFIER " bytes\n", ci->name, ci->class_guard.id, ci->total_size);
 }
 
 /**
@@ -161,8 +195,9 @@ oonf_class_remove(struct oonf_class *ci) {
 void *
 oonf_class_malloc(struct oonf_class *ci) {
   struct list_entity *entity;
+  struct oonf_class_guard_prefix *prefix;
+  struct oonf_class_guard_suffix *suffix;
   void *ptr;
-
 #ifdef OONF_LOG_DEBUG_INFO
   bool reuse = false;
 #endif
@@ -175,7 +210,12 @@ oonf_class_malloc(struct oonf_class *ci) {
      * No reusable memory block on the free_list.
      * Allocate a fresh one.
      */
-    ptr = calloc(1, ci->total_size);
+    if (ci->debug) {
+      ptr = calloc(1, ci->total_size + _debug_size);
+    }
+    else {
+      ptr = calloc(1, ci->total_size);
+    }
     if (ptr == NULL) {
       OONF_WARN(LOG_CLASS, "Out of memory for: %s", ci->name);
       return NULL;
@@ -205,7 +245,17 @@ oonf_class_malloc(struct oonf_class *ci) {
 
   OONF_DEBUG(LOG_CLASS, "MEMORY: alloc %s, %" PRINTF_SIZE_T_SPECIFIER " bytes%s\n", ci->name, ci->total_size,
     reuse ? ", reuse" : "");
-  return ptr;
+
+  if (!ci->debug) {
+    return ptr;
+  }
+
+  /* handle debug initialization */
+  prefix = ptr;
+  suffix = (void *)((uint8_t*)ptr + sizeof(struct oonf_class_guard_prefix) + ci->total_size);
+
+  oonf_class_guard_init_ext(&ci->class_guard, prefix, suffix);
+  return &prefix[1];
 }
 
 /**
@@ -220,12 +270,17 @@ oonf_class_free(struct oonf_class *ci, void *ptr) {
   bool reuse = false;
 #endif
 
+  if (ci->debug) {
+    oonf_class_check(ci, ptr);
+  }
+
   /*
    * Rather than freeing the memory right away, try to reuse at a later
    * point. Keep at least ten percent of the active used blocks or at least
    * ten blocks on the free list.
    */
-  if (ci->_free_list_size < ci->min_free_count || (ci->_free_list_size < ci->_current_usage / 10)) {
+  if (!ci->debug &&
+      (ci->_free_list_size < ci->min_free_count || (ci->_free_list_size < ci->_current_usage / 10))) {
     item = ptr;
 
     list_add_tail(&ci->_free_list, item);
@@ -245,6 +300,36 @@ oonf_class_free(struct oonf_class *ci, void *ptr) {
 
   OONF_DEBUG(
     LOG_CLASS, "MEMORY: free %s, %" PRINTF_SIZE_T_SPECIFIER " bytes%s\n", ci->name, ci->size, reuse ? ", reuse" : "");
+}
+
+void
+oonf_class_guard_add(struct oonf_class_guard *guard) {
+  guard->id = _next_debug_id;
+  _next_debug_id++;
+}
+
+/**
+ * Check if a memory block has still the right debug constraints.
+ * Will end program with an assert if block is wrong.
+ * @param ci class info
+ * @param ptr pointer to memory block
+ */
+void
+oonf_class_check(struct oonf_class *ci, void *ptr) {
+  struct oonf_class_guard_prefix *prefix;
+  struct oonf_class_guard_suffix *suffix;
+
+  if (!ci->debug) {
+    /* don't check */
+    return;
+  }
+
+  prefix = (void *)((uint8_t *)ptr - sizeof(struct oonf_class_guard_prefix));
+  suffix = (void *)((uint8_t *)ptr + ci->total_size);
+
+  OONF_ASSERT_HEX(oonf_class_guard_is_valid_ext(&ci->class_guard, prefix, suffix), LOG_CLASS, prefix, sizeof(prefix),
+      "class '%s' (id=%u): guard is bad (id=%u, g1=%08x, g2=%08x)", ci->name, ci->class_guard.id,
+      prefix->id, prefix->guard1, suffix->guard2);
 }
 
 /**
@@ -397,4 +482,27 @@ _cb_to_keystring(struct oonf_objectkey_str *buf, struct oonf_class *class, void 
   snprintf(buf->buf, sizeof(*buf), "%s::0x%" PRINTF_SIZE_T_HEX_SPECIFIER, class->name, (size_t)ptr);
 
   return buf->buf;
+}
+
+static void
+_cb_cfg_class_changed(void) {
+  struct oonf_class *info, *iterator;
+  struct _class_config config;
+  int result;
+
+  memset(&config, 0, sizeof(config));
+  result = cfg_schema_tobin(&config, _class_section.post, _class_entries, ARRAYSIZE(_class_entries));
+  if (result) {
+    OONF_WARN(LOG_CLASS, "Could not convert %s to binary (%d)", _class_section.type, -(result + 1));
+    return;
+  }
+
+  avl_for_each_element_safe(&_classes_tree, info, _node, iterator) {
+    if (config.debug != info->debug) {
+      if (info->_allocated == 0) {
+        info->debug = config.debug;
+        _free_freelist(info);
+      }
+    }
+  }
 }

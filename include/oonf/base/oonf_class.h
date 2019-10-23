@@ -76,6 +76,44 @@ struct oonf_objectkey_str {
   char buf[128];
 };
 
+/* storage data for a custom guard */
+struct oonf_class_guard {
+  const char *name;
+  uint32_t id;
+};
+
+enum {
+  OONF_CLASS_GUARD1 = 0x13572468,
+  OONF_CLASS_GUARD2 = 0x75318642
+};
+
+/**
+ * Prefix to check data for overwriting and type error
+ */
+struct oonf_class_guard_prefix {
+  uint32_t id;
+  uint32_t guard1;
+};
+
+#ifdef OONF_LOG_DEBUG_INFO
+#define OONF_CLASS_GUARD_PREFIX struct oonf_class_guard_prefix __guard_prefix;
+#else
+#define OONF_CLASS_GUARD_PREFIX
+#endif
+
+/**
+ * Suffix to check data for overwriting
+ */
+struct oonf_class_guard_suffix {
+  uint32_t guard2;
+};
+
+#ifdef OONF_LOG_DEBUG_INFO
+#define OONF_CLASS_GUARD_SUFFIX struct oonf_class_guard_suffix __guard_suffix;
+#else
+#define OONF_CLASS_GUARD_SUFFIX
+#endif
+
 /**
  * This structure represents a class of memory object, each with the same size.
  */
@@ -124,6 +162,12 @@ struct oonf_class {
 
   /*! Stats, recycled memory blocks */
   uint32_t _recycled;
+
+  /*! track debug status of class */
+  bool debug;
+
+  /* guard for debugging */
+  struct oonf_class_guard class_guard;
 };
 
 /**
@@ -174,6 +218,9 @@ EXPORT void oonf_class_remove(struct oonf_class *);
 
 EXPORT void *oonf_class_malloc(struct oonf_class *) __attribute__((warn_unused_result));
 EXPORT void oonf_class_free(struct oonf_class *, void *);
+EXPORT void oonf_class_check(struct oonf_class *ci, void *ptr);
+
+EXPORT void oonf_class_guard_add(struct oonf_class_guard *);
 
 EXPORT int oonf_class_extension_add(struct oonf_class_extension *);
 EXPORT void oonf_class_extension_remove(struct oonf_class_extension *);
@@ -247,5 +294,45 @@ static INLINE bool
 oonf_class_is_extension_registered(struct oonf_class_extension *ext) {
   return list_is_node_added(&ext->_node);
 }
+
+#ifdef OONF_LOG_DEBUG_INFO
+#define oonf_class_guard_init(guard, base) oonf_class_guard_init_ext(guard, &(base)->__guard_prefix, &(base)->__guard_suffix)
+
+static INLINE void
+oonf_class_guard_init_ext(struct oonf_class_guard *guard,
+    struct oonf_class_guard_prefix *prefix, struct oonf_class_guard_suffix *suffix) {
+  prefix->guard1 = OONF_CLASS_GUARD1;
+  prefix->id = guard->id;
+  suffix->guard2 = OONF_CLASS_GUARD2;
+}
+
+#define oonf_class_guard_is_valid(guard, base) oonf_class_guard_is_valid_ext(guard, &(base)->__guard_prefix, &(base)->__guard_suffix)
+#define OONF_CLASS_GUARD_ASSERT(guard, base, logging) OONF_ASSERT(oonf_class_guard_is_valid(guard, base), logging, "%s (%u) guard is bad (id=%u, guard1=%08x, guard2=%08x)", (guard)->name, (guard)->id, (base)->__guard_prefix.id, (base)->__guard_prefix.guard1, (base)->__guard_suffix.guard2)
+
+static INLINE bool
+oonf_class_guard_is_valid_ext(struct oonf_class_guard *guard,
+    struct oonf_class_guard_prefix *prefix, struct oonf_class_guard_suffix *suffix) {
+  return prefix->guard1 == OONF_CLASS_GUARD1
+      && suffix->guard2 == OONF_CLASS_GUARD2
+      && prefix->id == guard->id;
+}
+#else /* OONF_LOG_DEBUG_INFO */
+#define oonf_class_guard_init(guard, base) do {} while(0)
+static INLINE void
+oonf_class_guard_init_ext(struct oonf_class_guard *guard __attribute__((unused)),
+    struct oonf_class_guard_prefix *prefix __attribute__((unused)),
+    struct oonf_class_guard_suffix *suffix __attribute__((unused))) {
+}
+#define oonf_class_guard_is_valid(guard, base) true
+#define OONF_CLASS_GUARD_ASSERT(guard, ptr, logging) do {} while(0)
+
+static INLINE bool
+oonf_class_guard_is_valid_ext(struct oonf_class_guard *guard __attribute__((unused)),
+    struct oonf_class_guard_prefix *prefix __attribute__((unused)),
+    struct oonf_class_guard_suffix *suffix __attribute__((unused))) {
+  return true;
+}
+
+#endif /* OONF_LOG_DEBUG_INFO */
 
 #endif /* _OONF_CLASS_H */

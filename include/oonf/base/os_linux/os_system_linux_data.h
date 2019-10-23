@@ -56,6 +56,7 @@ struct os_system_netlink;
 #include <oonf/libcommon/list.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/libcore/oonf_subsystem.h>
+#include <oonf/base/oonf_class.h>
 #include <oonf/base/oonf_socket_data.h>
 #include <oonf/base/oonf_timer.h>
 
@@ -66,6 +67,9 @@ struct os_system_netlink;
  * Message for transfer to netlink subsystem
  */
 struct os_system_netlink_message {
+  /* object guard for debugging */
+  OONF_CLASS_GUARD_PREFIX;
+
   /*! pointer to buffer with netlink message */
   struct nlmsghdr *message;
 
@@ -83,12 +87,18 @@ struct os_system_netlink_message {
 
   /*! hook into list of messages, either buffered or sent */
   struct list_entity _node;
+
+  /* object guard for debugging */
+  OONF_CLASS_GUARD_SUFFIX;
 };
 
 /**
  * Centralized socket for all users of a certain netlink family type
  */
 struct os_system_netlink_socket {
+  /* object guard for debugging */
+  OONF_CLASS_GUARD_PREFIX;
+
   /*! NETLINK_xxx type socket */
   int32_t netlink_type;
   
@@ -118,11 +128,17 @@ struct os_system_netlink_socket {
   
   /*! hook into tree of netlink socket */
   struct avl_node _node;
+
+  /* object guard for debugging */
+  OONF_CLASS_GUARD_SUFFIX;
 };
 /**
  * Linux netlink handler
  */
 struct os_system_netlink {
+  /* object guard for debugging */
+  OONF_CLASS_GUARD_PREFIX;
+
   /*! name of netlink handler */
   const char *name;
 
@@ -176,6 +192,9 @@ struct os_system_netlink {
   
   /*! hook into list of handlers for netlink protocol */
   struct list_entity _node;
+
+  /* object guard for debugging */
+  OONF_CLASS_GUARD_SUFFIX;
 };
 #endif /* OS_SYSTEM_LINUX_DATA_H_ */
 

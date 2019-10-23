@@ -174,6 +174,17 @@ static struct oonf_class _netlink_protocol_class = {
   .size = sizeof(struct os_system_netlink_socket),
 };
 
+/* object guards for debugging */
+static struct oonf_class_guard _netlink_message_guard = {
+  .name = "netlink message"
+};
+static struct oonf_class_guard _netlink_socket_guard = {
+  .name = "netlink socket"
+};
+static struct oonf_class_guard _netlink_guard = {
+  .name = "netlink handler"
+};
+
 /**
  * Initialize os-specific subsystem
  * @return -1 if an error happened, 0 otherwise
@@ -201,6 +212,10 @@ _init(void) {
   oonf_timer_add(&_netlink_timer);
   avl_init(&_netlink_protocol_tree, avl_comp_int32, false);
   oonf_class_add(&_netlink_protocol_class);
+
+  oonf_class_guard_add(&_netlink_message_guard);
+  oonf_class_guard_add(&_netlink_guard);
+  oonf_class_guard_add(&_netlink_socket_guard);
   return 0;
 }
 
@@ -320,8 +335,9 @@ os_system_linux_netlink_add(struct os_system_netlink *nl, int protocol) {
       return -1;
     }
   }
-  
+
   list_add_tail(&nl->nl_socket->handlers, &nl->_node);
+  oonf_class_guard_init(&_netlink_guard, nl);
   return 0;
 }
 
@@ -334,6 +350,7 @@ os_system_linux_netlink_remove(struct os_system_netlink *nl) {
   struct os_system_netlink_socket *nl_socket;
   nl_socket = nl->nl_socket;
 
+  OONF_CLASS_GUARD_ASSERT(&_netlink_guard, nl, nl->used_by->logging);
   list_remove(&nl->_node);
   if (!list_is_empty(&nl_socket->handlers)) {
     return;
@@ -378,6 +395,8 @@ os_system_linux_netlink_send(struct os_system_netlink *nl, struct os_system_netl
     oonf_socket_set_write(&nl_socket->nl_socket, true);
   }
   list_add_tail(&nl->nl_socket->buffered_messages, &msg->_node);
+
+  oonf_class_guard_init(&_netlink_message_guard, msg);
 }
 
 /**
@@ -497,6 +516,8 @@ _add_protocol(int32_t protocol) {
   list_init_head(&nl_sock->buffered_messages);
   list_init_head(&nl_sock->sent_messages);
   list_init_head(&nl_sock->handlers);
+
+  oonf_class_guard_init(&_netlink_socket_guard, nl_sock);
   return nl_sock;
 
 os_add_netlink_fail:
@@ -514,6 +535,7 @@ os_add_netlink_fail:
 */
 static void 
 _remove_protocol(struct os_system_netlink_socket *nl_socket) {
+  OONF_CLASS_GUARD_ASSERT(&_netlink_socket_guard, nl_socket, LOG_OS_SYSTEM);
   if (os_fd_is_initialized(&nl_socket->nl_socket.fd)) {
     oonf_socket_remove(&nl_socket->nl_socket);
 
@@ -534,8 +556,10 @@ _cb_handle_netlink_timeout(struct oonf_timer_instance *ptr) {
   struct os_system_netlink_message *msg, *msg_it;
   
   nl_socket = container_of(ptr, struct os_system_netlink_socket, timeout);
+  OONF_CLASS_GUARD_ASSERT(&_netlink_socket_guard, nl_socket, LOG_OS_SYSTEM);
 
   list_for_each_element_safe(&nl_socket->sent_messages, msg, _node, msg_it) {
+    OONF_CLASS_GUARD_ASSERT(&_netlink_message_guard, msg, LOG_OS_SYSTEM);
     if (msg->originator->cb_error) {
       msg->originator->cb_error(msg);
     }
@@ -557,6 +581,7 @@ _send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
   struct nlmsghdr *nl_hdr;
   ssize_t ret;
   int err;
+
   if (!list_is_empty(&nl_socket->sent_messages)) {
     /* still messages in transit */
     return;
@@ -571,6 +596,8 @@ _send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
 
   nl_msg = list_first_element(&nl_socket->buffered_messages, nl_msg, _node);
   do {
+    OONF_CLASS_GUARD_ASSERT(&_netlink_message_guard, nl_msg, LOG_OS_SYSTEM);
+
     _netlink_send_iov[count].iov_base = nl_msg->message;
     _netlink_send_iov[count].iov_len = nl_msg->message->nlmsg_len;
 
@@ -620,6 +647,8 @@ _send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
 
       /* report error */
       list_for_each_element_safe(&nl_socket->sent_messages, nl_msg, _node,  nl_msg_it) {
+        OONF_CLASS_GUARD_ASSERT(&_netlink_message_guard, nl_msg, LOG_OS_SYSTEM);
+
         list_remove(&nl_msg->_node);
         nl_msg->result = err;
         if (nl_msg->originator->cb_error) {
@@ -630,6 +659,7 @@ _send_netlink_messages(struct os_system_netlink_socket *nl_socket) {
     else {
       /* just try again later, shuffle messages back to transmission queue */
       list_for_each_element_reverse_safe(&nl_socket->sent_messages, nl_msg, _node,  nl_msg_it) {
+        OONF_CLASS_GUARD_ASSERT(&_netlink_message_guard, nl_msg, LOG_OS_SYSTEM);
         list_remove(&nl_msg->_node);
         list_add_head(&nl_socket->buffered_messages, &nl_msg->_node);
       }
@@ -656,6 +686,7 @@ _find_matching_message(struct os_system_netlink_socket *nl_socket, uint32_t seqn
   struct os_system_netlink_message *nl_msg;
 
   list_for_each_element(&nl_socket->sent_messages, nl_msg, _node) {
+    OONF_CLASS_GUARD_ASSERT(&_netlink_message_guard, nl_msg, LOG_OS_SYSTEM);
     if (nl_msg->message->nlmsg_seq == seqno) {
       return nl_msg;
     }
@@ -679,6 +710,8 @@ _netlink_handler(struct oonf_socket_entry *entry) {
   int flags;
 
   nl_socket = container_of(entry, typeof(*nl_socket), nl_socket);
+  OONF_CLASS_GUARD_ASSERT(&_netlink_socket_guard, nl_socket, LOG_OS_SYSTEM);
+
   if (oonf_socket_is_write(entry)) {
     _send_netlink_messages(nl_socket);
   }
@@ -792,6 +825,7 @@ netlink_rcv_retry:
         else {
           /* this seems to be multicast */
           list_for_each_element(&nl_socket->handlers, nl_handler, _node) {
+            OONF_CLASS_GUARD_ASSERT(&_netlink_guard, nl_handler, LOG_OS_SYSTEM);
             for (i=0; i<nl_handler->multicast_message_count; i++) {
               if (nl_handler->multicast_messages[i] == nh->nlmsg_type) {
                 nl_handler->cb_multicast(nl_handler, nh);
