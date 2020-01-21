@@ -256,10 +256,10 @@ dlep_session_update_extensions(struct dlep_session *session, const uint8_t *extv
     }
 
     if (deactivate) {
-      if (radio) {
+      if (radio && session->parser.extensions[j]->cb_session_deactivate_radio != NULL) {
         session->parser.extensions[j]->cb_session_deactivate_radio(session);
       }
-      else {
+      if (!radio && session->parser.extensions[j]->cb_session_deactivate_router != NULL) {
         session->parser.extensions[j]->cb_session_deactivate_router(session);
       }
     }
@@ -318,7 +318,8 @@ dlep_session_process_tcp(struct oonf_stream_session *tcp_session, struct dlep_se
     oonf_stream_flush(tcp_session);
   }
 
-  if (session->restrict_signal == DLEP_KILL_SESSION) {
+  if (session->restrict_signal == DLEP_KILL_SESSION
+      || session->_peer_state == DLEP_PEER_TERMINATED) {
     return STREAM_SESSION_CLEANUP;
   }
   return STREAM_SESSION_ACTIVE;
