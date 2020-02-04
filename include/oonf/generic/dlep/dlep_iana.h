@@ -252,11 +252,26 @@ enum dlep_tlvs
   /*! MTU of interface */
   DLEP_MTU_TLV = 20,
 
-  /*! link ID TLV */
-  DLEP_LID_LENGTH_TLV = 26,
+  /*! Hopcount */
+  DLEP_HOPCOUNT_TLV = 21,
+
+  /* Hopcount request */
+  DLEP_HOPCONTROL_TLV = 22,
+
+  /* Queue parameters */
+  DLEP_QUEUE_PARAMETER_TLV = 23,
+
+  /* Queue pause */
+  DLEP_QUEUE_PAUSE_TLV = 24,
+
+  /* Queue pause */
+  DLEP_QUEUE_RESTART_TLV = 25,
 
   /*! link ID TLV */
-  DLEP_LID_TLV = 27,
+  DLEP_LID_TLV = 26,
+
+  /*! link ID TLV */
+  DLEP_LID_LENGTH_TLV = 27,
 
   /* l1 statistics */
 
