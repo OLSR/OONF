@@ -76,6 +76,7 @@ static void _cb_packet_event_unicast(struct oonf_socket_entry *);
 static void _cb_packet_event_multicast(struct oonf_socket_entry *);
 static void _cb_packet_event(struct oonf_socket_entry *, bool mc);
 static int _cb_interface_listener(struct os_interface_listener *l);
+static void _cb_delayed_change(struct oonf_callback *cb);
 
 /* subsystem definition */
 static const char *_dependencies[] = {
@@ -263,6 +264,8 @@ oonf_packet_send(struct oonf_packet_socket *pktsocket, union netaddr_socket *rem
  */
 void
 oonf_packet_add_managed(struct oonf_packet_managed *managed) {
+  static const char CHANGE_CALLBACK[] = "oonf_packet change";
+
   if (managed->config.input_buffer_length == 0) {
     managed->config.input_buffer = _input_buffer;
     managed->config.input_buffer_length = sizeof(_input_buffer);
@@ -271,6 +274,9 @@ oonf_packet_add_managed(struct oonf_packet_managed *managed) {
   managed->_if_listener.if_changed = _cb_interface_listener;
   managed->_if_listener.name = managed->_managed_config.interface;
   managed->_if_listener.mesh = managed->_managed_config.mesh;
+
+  managed->_change_callback.cb_trigger = _cb_delayed_change;
+  managed->_change_callback.name = CHANGE_CALLBACK;
 }
 
 /**
@@ -280,6 +286,7 @@ oonf_packet_add_managed(struct oonf_packet_managed *managed) {
  */
 void
 oonf_packet_remove_managed(struct oonf_packet_managed *managed, bool forced) {
+  oonf_callback_remove(&managed->_change_callback);
   oonf_packet_remove(&managed->socket_v4, forced);
   oonf_packet_remove(&managed->socket_v6, forced);
   oonf_packet_remove(&managed->multicast_v4, forced);
@@ -540,9 +547,23 @@ _apply_managed(struct oonf_packet_managed *managed) {
   }
 
   if (managed->cb_settings_change) {
-    managed->cb_settings_change(managed, changed);
+    managed->_change_callback_flag |= changed;
+    oonf_callback_add(&managed->_change_callback);
   }
   return result;
+}
+
+/**
+ * Trigger a delayed change handler
+ * @param cb callback that triggered
+ */
+static void
+_cb_delayed_change(struct oonf_callback *cb) {
+  struct oonf_packet_managed *managed;
+
+  managed = container_of(cb, struct oonf_packet_managed, _change_callback);
+  managed->cb_settings_change(managed, managed->_change_callback_flag);
+  managed->_change_callback_flag = false;
 }
 
 /**

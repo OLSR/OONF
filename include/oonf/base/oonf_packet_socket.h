@@ -51,6 +51,7 @@
 #include <oonf/libcommon/list.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/libcommon/netaddr_acl.h>
+#include <oonf/base/oonf_callback.h>
 #include <oonf/base/oonf_socket.h>
 #include <oonf/base/os_interface.h>
 
@@ -209,6 +210,12 @@ struct oonf_packet_managed {
    * @param changed true if one of the sockets had to be reconfigured
    */
   void (*cb_settings_change)(struct oonf_packet_managed *managed, bool changed);
+
+  /*! helper for delayed change callback handling */
+  struct oonf_callback _change_callback;
+
+  /*! parameter for delayed change callback */
+  bool _change_callback_flag;
 
   /*! configuration of managed socket */
   struct oonf_packet_managed_config _managed_config;
