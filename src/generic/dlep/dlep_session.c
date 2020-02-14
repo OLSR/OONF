@@ -302,10 +302,6 @@ dlep_session_process_tcp(struct oonf_stream_session *tcp_session, struct dlep_se
     return STREAM_SESSION_CLEANUP;
   }
 
-  if (session->restrict_signal == DLEP_KILL_SESSION) {
-    return STREAM_SESSION_CLEANUP;
-  }
-
   OONF_DEBUG(session->log_source, "Processed %" PRINTF_SSIZE_T_SPECIFIER " bytes", processed);
 
   abuf_pull(&tcp_session->in, processed);
@@ -318,8 +314,7 @@ dlep_session_process_tcp(struct oonf_stream_session *tcp_session, struct dlep_se
     oonf_stream_flush(tcp_session);
   }
 
-  if (session->restrict_signal == DLEP_KILL_SESSION
-      || session->_peer_state == DLEP_PEER_TERMINATED) {
+  if (session->restrict_signal == DLEP_KILL_SESSION) {
     return STREAM_SESSION_CLEANUP;
   }
   return STREAM_SESSION_ACTIVE;
@@ -424,7 +419,9 @@ dlep_session_process_signal(struct dlep_session *session, const void *ptr, size_
     "Process signal %d from %s (%" PRINTF_SIZE_T_SPECIFIER " bytes)", signal_type,
     netaddr_socket_to_string(&nbuf, &session->remote_socket), length);
 
-  if (session->restrict_signal != DLEP_ALL_SIGNALS && session->restrict_signal != signal_type) {
+  if (session->restrict_signal != DLEP_ALL_SIGNALS
+      && session->restrict_signal != DLEP_SESSION_TERMINATION_ACK
+      && session->restrict_signal != signal_type) {
     OONF_DEBUG(session->log_source,
       "Signal should have been %d,"
       " drop session",
@@ -433,7 +430,14 @@ dlep_session_process_signal(struct dlep_session *session, const void *ptr, size_
     return -1;
   }
 
-  result = _process_tlvs(session, signal_type, signal_length, &buffer[4]);
+  if (session->restrict_signal == DLEP_SESSION_TERMINATION_ACK
+      && signal_type != DLEP_SESSION_TERMINATION_ACK) {
+    /* don't process other signals if we wait for a Termination Ack */
+    result = DLEP_NEW_PARSER_OKAY;
+  }
+  else {
+    result = _process_tlvs(session, signal_type, signal_length, &buffer[4]);
+  }
 
   if (result == DLEP_NEW_PARSER_TERMINDATED) {
     /* session is now invalid, end parser */
@@ -834,6 +838,9 @@ _process_tlvs(struct dlep_session *session, int32_t signal_type, uint16_t signal
 static void
 _send_terminate(struct dlep_session *session, enum dlep_status status, const char *status_text) {
   if (session->restrict_signal != DLEP_UDP_PEER_DISCOVERY && session->restrict_signal != DLEP_UDP_PEER_OFFER) {
+    /* don't send anything else except for the Termination signal */
+    abuf_clear(session->writer.out);
+
     dlep_session_generate_signal_status(session, DLEP_SESSION_TERMINATION, NULL, status, status_text);
 
     session->restrict_signal = DLEP_SESSION_TERMINATION_ACK;
@@ -1079,13 +1086,13 @@ _call_extension_processing(struct dlep_session *session, struct dlep_extension *
     if (session->radio) {
       if (ext->signals[s].process_radio && ext->signals[s].process_radio(ext, session)) {
         OONF_DEBUG(session->log_source, "Error in radio signal processing of extension '%s'", ext->name);
-        return -1;
+        return DLEP_NEW_PARSER_TERMINDATED;
       }
     }
     else {
       if (ext->signals[s].process_router && ext->signals[s].process_router(ext, session)) {
         OONF_DEBUG(session->log_source, "Error in router signal processing of extension '%s'", ext->name);
-        return -1;
+        return DLEP_NEW_PARSER_TERMINDATED;
       }
     }
     break;

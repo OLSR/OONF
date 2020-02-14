@@ -480,7 +480,14 @@ dlep_base_proto_process_session_termination(
   struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
   dlep_base_proto_print_status(session);
 
+  /* we can kill the session now */
   session->_peer_state = DLEP_PEER_TERMINATED;
+  session->restrict_signal = DLEP_KILL_SESSION;
+
+  /* ignore all signals we planned to send, only the Termination ACK is important now */
+  abuf_clear(session->writer.out);
+
+  /* generate Termination ACK */
   return dlep_session_generate_signal(session, DLEP_SESSION_TERMINATION_ACK, NULL);
 }
 
@@ -493,7 +500,12 @@ dlep_base_proto_process_session_termination(
 int
 dlep_base_proto_process_session_termination_ack(
   struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
+  /* we can kill the session now */
+  session->_peer_state = DLEP_PEER_TERMINATED;
   session->restrict_signal = DLEP_KILL_SESSION;
+
+  /* don't send anything anymore */
+  abuf_clear(session->writer.out);
   return 0;
 }
 

@@ -49,6 +49,8 @@
 #include <oonf/generic/dlep/dlep_internal.h>
 #include <oonf/generic/dlep/dlep_telnet.h>
 
+#define SUBCOMMAND_TERMINATE "terminate"
+
 #define KEY_IF_NAME         "if_name"
 #define KEY_IF_SOCKET4      "if_socket4"
 #define KEY_IF_SOCKET6      "if_socket6"
@@ -133,12 +135,46 @@ dlep_telnet_cleanup(void) {
 }
 
 /**
+ * Iterate over all DLEP sessions and terminate them
+ */
+static void
+_terminate_all_dlep_sessions(void) {
+  struct dlep_if *interf;
+  struct dlep_session *session;
+
+  avl_for_each_element(dlep_if_get_tree(true), interf, _node) {
+    avl_for_each_element(&interf->session_tree, session, _node) {
+      dlep_session_terminate(session, DLEP_STATUS_OKAY,
+        "DLEP session terminated by admin");
+    }
+  }
+  avl_for_each_element(dlep_if_get_tree(false), interf, _node) {
+    avl_for_each_element(&interf->session_tree, session, _node) {
+      dlep_session_terminate(session, DLEP_STATUS_OKAY,
+        "DLEP session terminated by admin");
+    }
+  }
+}
+
+/**
  * Callback for dlepinfo telnet command
  * @param con telnet connection
  * @return telnet result
  */
 static enum oonf_telnet_result
 _cb_dlepinfo_cmd(struct oonf_telnet_data *con) {
+  const char *next;
+
+  if ((next = str_hasnextword(con->parameter, SUBCOMMAND_TERMINATE)) != NULL) {
+    if (strcasecmp(next, "true") == 0) {
+      _terminate_all_dlep_sessions();
+    }
+    else {
+      abuf_puts(con->out, "Please use the additional boolean parameter 'true' to"
+          "terminate all DLEP sessions\n");
+      return TELNET_RESULT_ACTIVE;
+    }
+  }
   return oonf_viewer_telnet_handler(
     con->out, &_template_storage, OONF_DLEP_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates));
 }
@@ -150,8 +186,18 @@ _cb_dlepinfo_cmd(struct oonf_telnet_data *con) {
  */
 static enum oonf_telnet_result
 _cb_dlepinfo_help(struct oonf_telnet_data *con) {
-  return oonf_viewer_telnet_help(
-    con->out, OONF_DLEP_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates));
+  enum oonf_telnet_result result;
+
+  result = oonf_viewer_telnet_help(
+      con->out, OONF_DLEP_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates);
+  if (result == TELNET_RESULT_ACTIVE) {
+    if (con->parameter == NULL || con->parameter[0] == 0
+        || strcasecmp(con->parameter, SUBCOMMAND_TERMINATE) == 0) {
+      abuf_puts(con->out, SUBCOMMAND_TERMINATE
+          ": terminates all running dlep sessions\n");
+    }
+  }
+  return result;
 }
 
 /**

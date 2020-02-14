@@ -272,23 +272,15 @@ _cb_send_multicast(struct dlep_session *session, int af_family) {
   /* get pointer to radio interface */
   interf = container_of(session, struct dlep_if, session);
 
-  switch (interf->udp_mode) {
-    case DLEP_IF_UDP_NONE:
-      return;
-    case DLEP_IF_UDP_SINGLE_SESSION:
-      if(interf->session_tree.count > 0) {
-        return;
-      }
-      break;
-    default:
-      break;
+  if (interf->udp_mode == DLEP_IF_UDP_ALWAYS
+      || (interf->udp_mode == DLEP_IF_UDP_SINGLE_SESSION
+            && avl_is_empty(&interf->session_tree))) {
+    OONF_DEBUG(
+        session->log_source, "Send multicast %" PRINTF_SIZE_T_SPECIFIER " bytes", abuf_getlen(session->writer.out));
+
+    oonf_packet_send_managed_multicast(
+        &interf->udp, abuf_getptr(session->writer.out), abuf_getlen(session->writer.out), af_family);
   }
-
-  OONF_DEBUG(
-    session->log_source, "Send multicast %" PRINTF_SIZE_T_SPECIFIER " bytes", abuf_getlen(session->writer.out));
-
-  oonf_packet_send_managed_multicast(
-    &interf->udp, abuf_getptr(session->writer.out), abuf_getlen(session->writer.out), af_family);
 
   abuf_clear(session->writer.out);
 

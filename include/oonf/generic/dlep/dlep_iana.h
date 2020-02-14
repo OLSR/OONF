@@ -253,10 +253,10 @@ enum dlep_tlvs
   DLEP_MTU_TLV = 20,
 
   /*! link ID TLV */
-  DLEP_LID_TLV = 21,
+  DLEP_LID_LENGTH_TLV = 26,
 
   /*! link ID TLV */
-  DLEP_LID_LENGTH_TLV = 22,
+  DLEP_LID_TLV = 27,
 
   /* l1 statistics */
 
