@@ -189,7 +189,7 @@ _cb_dlepinfo_help(struct oonf_telnet_data *con) {
   enum oonf_telnet_result result;
 
   result = oonf_viewer_telnet_help(
-      con->out, OONF_DLEP_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates);
+      con->out, OONF_DLEP_SUBSYSTEM, con->parameter, _templates, ARRAYSIZE(_templates));
   if (result == TELNET_RESULT_ACTIVE) {
     if (con->parameter == NULL || con->parameter[0] == 0
         || strcasecmp(con->parameter, SUBCOMMAND_TERMINATE) == 0) {
