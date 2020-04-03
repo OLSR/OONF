@@ -533,10 +533,10 @@ static void
 _initialize_if_default_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net) {
   size_t i;
 
-  memset(_value_if_data, 0, sizeof(_value_if_data));
+  memset(_value_neigh_data, 0, sizeof(_value_neigh_data));
 
-  for (i = 0; i < OONF_LAYER2_NET_COUNT; i++) {
-    oonf_layer2_net_default_data_to_string(_value_if_data[i], sizeof(_value_if_data[i]), l2net, i, template->create_raw);
+  for (i = 0; i < OONF_LAYER2_NEIGH_COUNT; i++) {
+    oonf_layer2_net_default_data_to_string(_value_neigh_data[i], sizeof(_value_neigh_data[i]), l2net, i, template->create_raw);
   }
 }
 

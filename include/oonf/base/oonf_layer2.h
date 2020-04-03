@@ -1121,8 +1121,8 @@ oonf_layer2_net_data_to_string(
  */
 static INLINE const char *
 oonf_layer2_net_default_data_to_string(
-  char *buffer, size_t length, struct oonf_layer2_net *l2net, enum oonf_layer2_network_index idx, bool raw) {
-  return oonf_layer2_data_to_string(buffer, length, &l2net->data[idx], oonf_layer2_net_metadata_get(idx), raw);
+  char *buffer, size_t length, struct oonf_layer2_net *l2net, enum oonf_layer2_neighbor_index idx, bool raw) {
+  return oonf_layer2_data_to_string(buffer, length, &l2net->neighdata[idx], oonf_layer2_neigh_metadata_get(idx), raw);
 }
 
 
