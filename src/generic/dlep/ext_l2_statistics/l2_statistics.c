@@ -63,6 +63,8 @@ static const uint16_t _session_initack_tlvs[] = {
   DLEP_BYTES_T_TLV,
   DLEP_THROUGHPUT_T_TLV,
   DLEP_CDRR_BC_TLV,
+  DLEP_R_FRAME_ERROR_RATE_TLV,
+  DLEP_T_FRAME_ERROR_RATE_TLV,
 };
 
 /* peer update */
@@ -75,6 +77,8 @@ static const uint16_t _peer_session_tlvs[] = {
   DLEP_BYTES_T_TLV,
   DLEP_THROUGHPUT_T_TLV,
   DLEP_CDRR_BC_TLV,
+  DLEP_R_FRAME_ERROR_RATE_TLV,
+  DLEP_T_FRAME_ERROR_RATE_TLV,
 };
 
 /* destination up/update */
@@ -88,6 +92,8 @@ static const uint16_t _dst_tlvs[] = {
   DLEP_BYTES_T_TLV,
   DLEP_THROUGHPUT_T_TLV,
   DLEP_CDRR_BC_TLV,
+  DLEP_R_FRAME_ERROR_RATE_TLV,
+  DLEP_T_FRAME_ERROR_RATE_TLV,
 };
 static const uint16_t _dst_mandatory[] = {
   DLEP_MAC_ADDRESS_TLV,
@@ -139,6 +145,8 @@ static struct dlep_extension_tlv _tlvs[] = {
   { DLEP_BYTES_T_TLV, 8, 8 },
   { DLEP_THROUGHPUT_T_TLV, 8, 8 },
   { DLEP_CDRR_BC_TLV, 8, 8 },
+  { DLEP_R_FRAME_ERROR_RATE_TLV, 1, 1 },
+  { DLEP_T_FRAME_ERROR_RATE_TLV, 1, 1 },
 };
 
 static struct dlep_neighbor_mapping _neigh_mappings[] = {
@@ -208,6 +216,24 @@ static struct dlep_neighbor_mapping _neigh_mappings[] = {
   {
     .dlep = DLEP_CDRR_BC_TLV,
     .layer2 = OONF_LAYER2_NEIGH_RX_BC_BITRATE,
+    .length = 8,
+    .scaling = 1,
+
+    .from_tlv = dlep_reader_map_identity,
+    .to_tlv = dlep_writer_map_identity,
+  },
+  {
+    .dlep = DLEP_R_FRAME_ERROR_RATE_TLV,
+    .layer2 = OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE,
+    .length = 1,
+    .scaling = 1,
+
+    .from_tlv = dlep_reader_map_identity,
+    .to_tlv = dlep_writer_map_identity,
+  },
+  {
+    .dlep = DLEP_T_FRAME_ERROR_RATE_TLV,
+    .layer2 = OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE,
     .length = 8,
     .scaling = 1,
 

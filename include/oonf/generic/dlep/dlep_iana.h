@@ -279,73 +279,81 @@ enum dlep_tlvs
   DLEP_FREQUENCY_TLV = 65408,
 
   /*! channel bandwidth in Hz */
-  DLEP_BANDWIDTH_TLV,
+  DLEP_BANDWIDTH_TLV = 65409,
 
   /*! noise level in milli dBm */
-  DLEP_NOISE_LEVEL_TLV,
+  DLEP_NOISE_LEVEL_TLV = 65410,
 
   /*! total channel active time in ns */
-  DLEP_CHANNEL_ACTIVE_TLV,
+  DLEP_CHANNEL_ACTIVE_TLV = 65411,
 
   /*! total channel busy time in ns */
-  DLEP_CHANNEL_BUSY_TLV,
+  DLEP_CHANNEL_BUSY_TLV = 65412,
 
   /*! total channel receiver time in ns */
-  DLEP_CHANNEL_RX_TLV,
+  DLEP_CHANNEL_RX_TLV = 65413,
 
   /*! total channel transmission time in ns */
-  DLEP_CHANNEL_TX_TLV,
+  DLEP_CHANNEL_TX_TLV = 65414,
 
   /*! signal strength (receive) in milli dBm */
-  DLEP_SIGNAL_RX_TLV,
+  DLEP_SIGNAL_RX_TLV = 65415,
 
   /*! signal strength (transmit) in milli dBm */
-  DLEP_SIGNAL_TX_TLV,
+  DLEP_SIGNAL_TX_TLV = 65416,
 
   /* l2 statistics */
 
   /*! total number of frames (receive) */
-  DLEP_FRAMES_R_TLV,
+  DLEP_FRAMES_R_TLV = 65417,
 
   /*! total number of frames (transmit) */
-  DLEP_FRAMES_T_TLV,
+  DLEP_FRAMES_T_TLV = 65418,
 
   /*! total number of bytes (receive) */
-  DLEP_BYTES_R_TLV,
+  DLEP_BYTES_R_TLV = 65419,
 
   /*! total number of bytes (transmit) */
-  DLEP_BYTES_T_TLV,
+  DLEP_BYTES_T_TLV = 65420,
 
   /*! outgoing throughput in bit/s */
-  DLEP_THROUGHPUT_T_TLV,
+  DLEP_THROUGHPUT_T_TLV = 65421,
 
   /*! total number of frame retransmissions */
-  DLEP_FRAMES_RETRIES_TLV,
+  DLEP_FRAMES_RETRIES_TLV = 65422,
 
   /*! total number of failed transmissions */
-  DLEP_FRAMES_FAILED_TLV,
+  DLEP_FRAMES_FAILED_TLV = 65423,
 
   /* radio attributes */
 
   /*! true if radio needs unicast traffic for MCS rate selection */
-  DLEP_MCS_BY_PROBING,
+  DLEP_MCS_BY_PROBING = 65424,
 
   /*! true if radio can only receive unicast traffic */
-  DLEP_RX_ONLY_UNICAST,
+  DLEP_RX_ONLY_UNICAST = 65425,
 
   /*! true if radio can only send unicast traffic */
-  DLEP_TX_ONLY_UNICAST,
+  DLEP_TX_ONLY_UNICAST = 65426,
 
   /* more layer1 statistics */
 
   /*! rx broadcast bitrate */
-  DLEP_CDRR_BC_TLV,
+  DLEP_CDRR_BC_TLV = 65427,
 
   /* ipv4 DNS service */
-  DLEP_IPV4_DNS_SERVER_TLV,
+  DLEP_IPV4_DNS_SERVER_TLV = 65428,
 
   /* ipv6 DNS service */
-  DLEP_IPV6_DNS_SERVER_TLV,
+  DLEP_IPV6_DNS_SERVER_TLV = 65429,
+
+  /* more layer 2 statistics */
+
+  /* current frame error rate in percent (receive) */
+  DLEP_R_FRAME_ERROR_RATE_TLV = 65430,
+
+  /* current frame error rate in percent (transmit) */
+  DLEP_T_FRAME_ERROR_RATE_TLV = 65431,
 };
 
 enum dlep_peer_type_flags

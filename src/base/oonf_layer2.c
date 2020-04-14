@@ -105,11 +105,13 @@ static const struct oonf_layer2_metadata _metadata_neigh[OONF_LAYER2_NEIGH_COUNT
   [OONF_LAYER2_NEIGH_TX_RLQ] = { .key = "tx_rlq", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RX_RLQ] = { .key = "rx_rlq", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RX_BC_BITRATE] = { .key = "rx_bc_bitrate", .type = OONF_LAYER2_INTEGER_DATA, .unit = "bit/s", .scaling = 1 },
-  [OONF_LAYER2_NEIGH_RX_BC_LOSS] = { .key = "rx_bc_loss", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1000 },
+  [OONF_LAYER2_NEIGH_RX_BC_LOSS] = { .key = "rx_bc_loss", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 100 },
   [OONF_LAYER2_NEIGH_LATENCY] = { .key = "latency", .type = OONF_LAYER2_INTEGER_DATA, .unit = "s", .scaling = 1000000 },
   [OONF_LAYER2_NEIGH_RESOURCES] = { .key = "resources", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RADIO_HOPCOUNT] = { .key = "radio_hopcount", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_IP_HOPCOUNT] = { .key = "ip_hopcount", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE] = { .key = "tx_error_rate", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE] = { .key = "rx_error_rate", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
 };
 
 /* layer2 network metadata */

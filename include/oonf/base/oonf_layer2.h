@@ -449,7 +449,7 @@ enum oonf_layer2_neighbor_index
   /*! incoming broadcast bitrate in bit/s */
   OONF_LAYER2_NEIGH_RX_BC_BITRATE,
 
-  /*! incoming broadcast loss in 1/1000 */
+  /*! incoming broadcast loss in 1/100 */
   OONF_LAYER2_NEIGH_RX_BC_LOSS,
 
   /*! latency to neighbor in microseconds */
@@ -462,10 +462,16 @@ enum oonf_layer2_neighbor_index
   OONF_LAYER2_NEIGH_RADIO_HOPCOUNT,
 
   /*!
-   *IP hopcount (including ethernet between radio and router) to neighbor router,
+   * IP hopcount (including ethernet between radio and router) to neighbor router,
    * only available for multihop capable radios
    */
   OONF_LAYER2_NEIGH_IP_HOPCOUNT,
+
+  /*! outgoing frame error rate in 1/100 */
+  OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE,
+
+  /*! incoming frame error rate in 1/100 */
+  OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE,
 
   /*! number of neighbor metrics */
   OONF_LAYER2_NEIGH_COUNT,
