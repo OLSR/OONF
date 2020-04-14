@@ -93,6 +93,9 @@ enum dlep_extensions
   /*! DLEP metrics defined by base RFC */
   DLEP_EXTENSION_BASE_METRIC = -1,
 
+  /*! RFC8629 */
+  DLEP_EXTENSION_HOPCOUNT = 1,
+
   /*! Additional DLEP physical layer statistics */
   DLEP_EXTENSION_L1_STATS = 65520,
 
@@ -109,7 +112,7 @@ enum dlep_extensions
   DLEP_EXTENSION_DNS = 65524,
 
   /*! number of supported (non-base) DLEP extensions */
-  DLEP_EXTENSION_COUNT = 5,
+  DLEP_EXTENSION_COUNT = 6,
 };
 
 /**
@@ -354,6 +357,9 @@ enum dlep_tlvs
 
   /* current frame error rate in percent (transmit) */
   DLEP_T_FRAME_ERROR_RATE_TLV = 65431,
+
+  /* number of IP hops between routers attached to the radios */
+  DLEP_IP_HOPCOUNT_TLV = 65432,
 };
 
 enum dlep_peer_type_flags
