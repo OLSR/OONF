@@ -234,7 +234,7 @@ static struct dlep_neighbor_mapping _neigh_mappings[] = {
   {
     .dlep = DLEP_T_FRAME_ERROR_RATE_TLV,
     .layer2 = OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE,
-    .length = 8,
+    .length = 1,
     .scaling = 1,
 
     .from_tlv = dlep_reader_map_identity,

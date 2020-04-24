@@ -360,6 +360,9 @@ enum dlep_tlvs
 
   /* number of IP hops between routers attached to the radios */
   DLEP_IP_HOPCOUNT_TLV = 65432,
+
+  /* true if radio is able to forward traffic over multiple hops */
+  DLEP_CAN_MULTIHOP = 65433,
 };
 
 enum dlep_peer_type_flags
