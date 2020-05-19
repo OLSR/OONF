@@ -112,6 +112,8 @@ static const struct oonf_layer2_metadata _metadata_neigh[OONF_LAYER2_NEIGH_COUNT
   [OONF_LAYER2_NEIGH_IP_HOPCOUNT] = { .key = "ip_hopcount", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE] = { .key = "tx_error_rate", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE] = { .key = "rx_error_rate", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE_PKTSIZE] = { .key = "tx_error_pktsize", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE_PKTSIZE] = { .key = "rx_error_pktsize", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
 };
 
 /* layer2 network metadata */

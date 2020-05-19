@@ -53,6 +53,13 @@
 
 #include <oonf/generic/dlep/ext_l2_statistics/l2_statistics.h>
 
+static int _reader_error_rate(
+  struct oonf_layer2_data *data, const struct oonf_layer2_metadata *meta,
+  struct dlep_session *session, uint16_t dlep_tlv, uint64_t scaling);
+static int _writer_error_rate(
+    struct dlep_writer *writer, struct oonf_layer2_data *data,
+  const struct oonf_layer2_metadata *meta, uint16_t tlv, uint16_t length, uint64_t scaling);
+
 /* peer initialization ack */
 static const uint16_t _session_initack_tlvs[] = {
   DLEP_FRAMES_R_TLV,
@@ -145,8 +152,8 @@ static struct dlep_extension_tlv _tlvs[] = {
   { DLEP_BYTES_T_TLV, 8, 8 },
   { DLEP_THROUGHPUT_T_TLV, 8, 8 },
   { DLEP_CDRR_BC_TLV, 8, 8 },
-  { DLEP_R_FRAME_ERROR_RATE_TLV, 1, 1 },
-  { DLEP_T_FRAME_ERROR_RATE_TLV, 1, 1 },
+  { DLEP_R_FRAME_ERROR_RATE_TLV, 3, 3 },
+  { DLEP_T_FRAME_ERROR_RATE_TLV, 3, 3 },
 };
 
 static struct dlep_neighbor_mapping _neigh_mappings[] = {
@@ -225,20 +232,20 @@ static struct dlep_neighbor_mapping _neigh_mappings[] = {
   {
     .dlep = DLEP_R_FRAME_ERROR_RATE_TLV,
     .layer2 = OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE,
-    .length = 1,
+    .length = 3,
     .scaling = 1,
 
-    .from_tlv = dlep_reader_map_identity,
-    .to_tlv = dlep_writer_map_identity,
+    .from_tlv = _reader_error_rate,
+    .to_tlv = _writer_error_rate,
   },
   {
     .dlep = DLEP_T_FRAME_ERROR_RATE_TLV,
     .layer2 = OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE,
-    .length = 1,
+    .length = 3,
     .scaling = 1,
 
-    .from_tlv = dlep_reader_map_identity,
-    .to_tlv = dlep_writer_map_identity,
+    .from_tlv = _reader_error_rate,
+    .to_tlv = _writer_error_rate,
   },
 };
 
@@ -263,4 +270,107 @@ struct dlep_extension *
 dlep_l2_statistics_init(void) {
   dlep_extension_add(&_l2_stats);
   return &_l2_stats;
+}
+
+/**
+ * Read frame error rate TLV into layer2 database objects
+ * @param data layer2 network data array
+ * @param meta metadata description for data
+ * @param session dlep session
+ * @param dlep_tlv dlep TLV id
+ * @param scaling fixed integer arithmetics scaling factor
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_reader_error_rate(struct oonf_layer2_data *data, const struct oonf_layer2_metadata *meta,
+  struct dlep_session *session, uint16_t dlep_tlv, uint64_t scaling) {
+  struct dlep_parser_value *value;
+  const uint8_t *dlepvalue;
+  uint8_t error_rate;
+  uint16_t pkt_size;
+
+  value = dlep_session_get_tlv_value(session, dlep_tlv);
+  if (!value) {
+    return 0;
+  }
+  if (scaling != 1 || value->length != 3) {
+    return -1;
+  }
+
+  /* read binary values */
+  dlepvalue = dlep_parser_get_tlv_binary(&session->parser, value);
+  memcpy(&error_rate, dlepvalue, 1);
+  memcpy(&pkt_size, &dlepvalue[1], 2);
+  pkt_size = ntohs(pkt_size);
+
+  /* set error rate */
+  oonf_layer2_data_set_int64(data, session->l2_origin, meta, error_rate, scaling);
+
+  switch (dlep_tlv) {
+    case DLEP_R_FRAME_ERROR_RATE_TLV:
+      data += (OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE_PKTSIZE - OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE);
+      meta += (OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE_PKTSIZE - OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE);
+      break;
+    case DLEP_T_FRAME_ERROR_RATE_TLV:
+      data += (OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE_PKTSIZE - OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE);
+      meta += (OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE_PKTSIZE - OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE);
+      break;
+    default:
+      return -1;
+  }
+
+  /* set error rate pktsize */
+  oonf_layer2_data_set_int64(data, session->l2_origin, meta, pkt_size, scaling);
+  return 0;
+}
+
+/**
+ * Map layer2 frequency to DLEP TLV
+ * @param writer dlep writer
+ * @param data layer2 network data array
+ * @param tlv DLEP tlv id
+ * @param length tlv length
+ * @param scaling fixed integer arithmetics scaling factor
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_writer_error_rate (struct dlep_writer *writer, struct oonf_layer2_data *data,
+  const struct oonf_layer2_metadata *meta, uint16_t tlv, uint16_t length, uint64_t scaling) {
+  struct oonf_layer2_data *data2;
+  int64_t l2value;
+  uint64_t tmp16;
+  uint8_t dlep_value[3];
+
+  if (scaling != 1 || length != 3) {
+    return -1;
+  }
+  if (meta->type != OONF_LAYER2_INTEGER_DATA) {
+    return -1;
+  }
+
+  switch (tlv) {
+    case DLEP_R_FRAME_ERROR_RATE_TLV:
+      data2 = data + (OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE_PKTSIZE - OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE);
+      break;
+    case DLEP_T_FRAME_ERROR_RATE_TLV:
+      data2 = data + (OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE_PKTSIZE - OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE);
+      break;
+    default:
+      return -1;
+  }
+
+  if (oonf_layer2_data_read_int64(&l2value, data, scaling)) {
+    return 0;
+  }
+  dlep_value[0] = l2value;
+
+  if (oonf_layer2_data_read_int64(&l2value, data2, scaling)) {
+    return 0;
+  }
+  tmp16 = l2value;
+  tmp16 = htons(tmp16);
+  memcpy(&dlep_value[1], &tmp16, 2);
+
+  dlep_writer_add_tlv(writer, tlv, &dlep_value[0], length);
+  return 0;
 }

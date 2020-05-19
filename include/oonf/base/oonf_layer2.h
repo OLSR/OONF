@@ -473,6 +473,12 @@ enum oonf_layer2_neighbor_index
   /*! incoming frame error rate in 1/100 */
   OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE,
 
+  /*! outgoing frame error rate used packet size in bytes */
+  OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE_PKTSIZE,
+
+  /*! incoming frame error rate used packet size in bytes */
+  OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE_PKTSIZE,
+
   /*! number of neighbor metrics */
   OONF_LAYER2_NEIGH_COUNT,
 };
