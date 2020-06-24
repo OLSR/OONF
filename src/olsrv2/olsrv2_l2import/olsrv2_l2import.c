@@ -200,6 +200,7 @@ _get_l2export(const char *name) {
   mod->_node.key = mod->originator;
   avl_insert(&_l2export_tree, &mod->_node);
 
+  OONF_DEBUG(LOG_L2IMPORT, "Adding import-origin '%s'", name);
   return mod;
 }
 
@@ -226,6 +227,8 @@ _destroy_l2export(struct _l2export_data *l2import) {
     }
   }
 
+  OONF_DEBUG(LOG_L2IMPORT, "Removing import-origin '%s'", l2import->originator);
+
   // TODO: iterate over the l2 database if we need to remove something from the olsrv2 LAN database
   oonf_class_free(&_l2export_class, l2import);
 }
@@ -233,17 +236,24 @@ _destroy_l2export(struct _l2export_data *l2import) {
 static bool
 _is_matching_origin(struct oonf_layer2_neighbor_address *addr, const char *pattern) {
   int len;
+  bool result;
 
   if (strcmp(addr->origin->name, pattern) == 0) {
+    OONF_DEBUG(LOG_L2IMPORT, "Exact origin match: '%s'", addr->origin->name);
+
     return true;
   }
 
   len = strlen(pattern);
   if (len == 0 || pattern[len-1] != '*') {
+    OONF_DEBUG(LOG_L2IMPORT, "No origin match: '%s' != '%s'", addr->origin->name, pattern);
     return false;
   }
 
-  return strncmp(addr->origin->name, pattern, len-1) == 0;
+  result = strncmp(addr->origin->name, pattern, len-1) == 0;
+  OONF_DEBUG(LOG_L2IMPORT, "Origin pattern cmp: '%s' %s '%s'",
+             addr->origin->name, result ? "==" : "!=", pattern);
+  return result;
 }
 
 static void
@@ -252,15 +262,25 @@ _remove_l2neighip_lans(struct oonf_layer2_neighbor_address *nip) {
   struct os_route_key rt_key;
   struct nhdp_domain *domain;
 
+#ifdef OONF_LOG_DEBUG_INFO
+  struct os_route_str rbuf;
   os_routing_init_sourcespec_prefix(&rt_key, &nip->ip);
+#endif
 
   avl_for_each_element(&_l2export_tree, l2import, _node) {
     if (_is_matching_origin(nip, l2import->originator)) {
       if (l2import->domain >= 0) {
         domain = nhdp_domain_get_by_ext(l2import->domain);
+
+        OONF_DEBUG(LOG_L2IMPORT, "Remove lan (%d): %s", l2import->domain,
+                   os_routing_key_to_string(&rbuf, &rt_key));
+
         olsrv2_lan_remove(domain, &rt_key);
       }
       else {
+        OONF_DEBUG(LOG_L2IMPORT, "Remove lan (all): %s",
+                   os_routing_key_to_string(&rbuf, &rt_key));
+
         list_for_each_element(nhdp_domain_get_list(), domain, _node) {
           olsrv2_lan_remove(domain, &rt_key);
         }
@@ -277,6 +297,10 @@ _cb_l2neigh_ip_added(void *ptr) {
   struct nhdp_domain *domain;
   uint32_t metric;
   int32_t distance;
+
+#ifdef OONF_LOG_DEBUG_INFO
+  struct os_route_str rbuf;
+#endif
   os_routing_init_sourcespec_prefix(&rt_key, &nip->ip);
 
   avl_for_each_element(&_l2export_tree, l2import, _node) {
@@ -293,9 +317,13 @@ _cb_l2neigh_ip_added(void *ptr) {
           metric = l2import->routing_metric;
         }
 
+        OONF_DEBUG(LOG_L2IMPORT, "Add lan (%d): %s", l2import->domain,
+                   os_routing_key_to_string(&rbuf, &rt_key));
         olsrv2_lan_add(domain, &rt_key, metric , distance);
       }
       else {
+        OONF_DEBUG(LOG_L2IMPORT, "Add lan (all): %s",
+                   os_routing_key_to_string(&rbuf, &rt_key));
         list_for_each_element(nhdp_domain_get_list(), domain, _node) {
           metric = 1;
           if (l2import->routing_metric < RFC7181_METRIC_MIN) {

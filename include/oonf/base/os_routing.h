@@ -266,6 +266,19 @@ EXPORT int os_routing_avl_cmp_route_key(const void *, const void *);
 
 EXPORT const char *os_routing_cfg_get_rttype(size_t index, const void *unused);
 
+/**
+ * Convert route key into string
+ * @param buf target string buffer
+ * @param key route key
+ */
+static INLINE const char *
+os_routing_key_to_string(struct os_route_str *buf, const struct os_route_key *key) {
+    struct netaddr_str buf1, buf2;
+    buf->buf[0] = 0;
+    snprintf(buf->buf, sizeof(*buf), "[dst=%s/src=%s]", netaddr_to_string(&buf1, &key->dst), netaddr_to_string(&buf2, &key->src));
+    return buf->buf;
+}
+
 /* include os-specific headers */
 #if defined(__linux__)
 #include <oonf/base/os_linux/os_routing_linux.h>
