@@ -55,17 +55,24 @@ IF (NOT OONF_STATIC_PLUGINS)
                              olsrv2
                              olsrv2info
                              olsrv2_lan
+                             olsrv2_old_lan
+                             olsrv2_l2import
                              netjsoninfo
                              layer2_import
                              auto_ll4
                              http
+                             mpr
+                             remotecontrol
+                             route_modifier
                              dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 
 
 IF (NOT OONF_OPTIONAL_STATIC_PLUGINS)
-    set (OONF_OPTIONAL_STATIC_PLUGINS nl80211_listener)
+    set (OONF_OPTIONAL_STATIC_PLUGINS nl80211_listener
+                                      cfg_uciloader
+                                      )
 ENDIF (NOT OONF_OPTIONAL_STATIC_PLUGINS)
 
 ##################################
