@@ -4,6 +4,7 @@ SET (source             ext_base_metric/metric.c
                         ext_base_proto/proto.c
                         ext_base_proto/proto_router.c
                         ext_base_proto/proto_radio.c
+                        ext_hopcount/hopcount.c
                         ext_l1_statistics/l1_statistics.c
                         ext_l2_statistics/l2_statistics.c
                         ext_radio_attributes/radio_attributes.c

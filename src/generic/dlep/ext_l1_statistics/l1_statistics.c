@@ -316,9 +316,11 @@ _reader_map_array (struct oonf_layer2_data *data, const struct oonf_layer2_metad
     switch (l2idx) {
       case OONF_LAYER2_NET_BANDWIDTH_1:
         data += (OONF_LAYER2_NET_BANDWIDTH_2 - OONF_LAYER2_NET_BANDWIDTH_1);
+        meta += (OONF_LAYER2_NET_BANDWIDTH_2 - OONF_LAYER2_NET_BANDWIDTH_1);
         break;
       case OONF_LAYER2_NET_FREQUENCY_1:
         data += (OONF_LAYER2_NET_FREQUENCY_2 - OONF_LAYER2_NET_FREQUENCY_1);
+        meta += (OONF_LAYER2_NET_FREQUENCY_2 - OONF_LAYER2_NET_FREQUENCY_1);
         break;
       default:
         return -1;

@@ -64,6 +64,7 @@
 #include <oonf/generic/dlep/ext_base_ip/ip.h>
 #include <oonf/generic/dlep/ext_base_metric/metric.h>
 #include <oonf/generic/dlep/ext_base_proto/proto_radio.h>
+#include <oonf/generic/dlep/ext_hopcount/hopcount.h>
 #include <oonf/generic/dlep/ext_l1_statistics/l1_statistics.h>
 #include <oonf/generic/dlep/ext_l2_statistics/l2_statistics.h>
 #include <oonf/generic/dlep/ext_radio_attributes/radio_attributes.h>
@@ -240,6 +241,7 @@ _init(void) {
   dlep_session_init();
   dlep_base_ip_init();
   dlep_base_metric_init();
+  dlep_hopcount_init();
   dlep_l1_statistics_init();
   dlep_l2_statistics_init();
   dlep_lid_init();
