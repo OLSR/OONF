@@ -408,7 +408,11 @@ _routing_set(struct os_system_netlink_message *nl_msg, struct os_route *route, u
   rt_msg->rtm_family = route->p.family;
   rt_msg->rtm_scope = rt_scope;
   rt_msg->rtm_protocol = route->p.protocol;
-  rt_msg->rtm_table = route->p.table;
+
+  /* add routing table */
+  if (os_system_linux_netlink_addreq(nl_msg, RTA_TABLE, &route->p.table, sizeof(route->p.table))) {
+    return -1;
+  }
 
   /* set default route type */
   rt_msg->rtm_type = RTN_UNICAST;
@@ -536,6 +540,9 @@ _routing_parse_nlmsg(struct os_route *route, struct nlmsghdr *msg) {
         netaddr_from_binary_prefix(
           &route->p.key.src, RTA_DATA(rt_attr), RTA_PAYLOAD(rt_attr), rt_msg->rtm_family, rt_msg->rtm_src_len);
         break;
+      case RTA_TABLE:
+          memcpy(&route->p.table, RTA_DATA(rt_attr), sizeof(route->p.table));
+          break;
       case RTA_PRIORITY:
         memcpy(&route->p.metric, RTA_DATA(rt_attr), sizeof(route->p.metric));
         break;
