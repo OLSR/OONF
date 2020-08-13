@@ -160,7 +160,7 @@ static struct cfg_schema_entry _rt_domain_entries[] = {
     "Set the source IP of IPv4-routes to a fixed value."),
   CFG_MAP_INT32_MINMAX(
     olsrv2_routing_domain, protocol, "protocol", "100", "Protocol number to be used in routing table", 0, 1, 254),
-  CFG_MAP_INT32_MINMAX(olsrv2_routing_domain, table, "table", "254", "Routing table number for routes", 0, 1, 254),
+  CFG_MAP_INT32_MINMAX(olsrv2_routing_domain, table, "table", "254", "Routing table number for routes", 0, 1, 65535),
   CFG_MAP_INT32_MINMAX(
     olsrv2_routing_domain, distance, "distance", "2", "Metric Distance to be used in routing table", 0, 1, 255),
   CFG_MAP_BOOL(
