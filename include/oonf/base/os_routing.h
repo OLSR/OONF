@@ -189,7 +189,7 @@ struct os_route_parameter {
   int metric;
 
   /*! routing table protocol */
-  unsigned char table;
+  uint32_t table;
 
   /*! routing routing protocol */
   unsigned char protocol;
