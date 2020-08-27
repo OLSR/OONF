@@ -77,7 +77,7 @@ static void parse_early_commandline(int argc, char **argv);
 static int parse_commandline(int argc, char **argv, const struct oonf_appdata *, bool reload_only);
 static int display_schema(void);
 
-static bool _end_oonf_signal, _display_schema, _debug_early, _ignore_unknown;
+static bool _display_schema, _debug_early, _ignore_unknown;
 static char *_schema_name;
 
 static int (*_handle_scheduling)(void) = NULL;
@@ -163,7 +163,6 @@ oonf_main(int argc, char **argv, const struct oonf_appdata *appdata) {
   _ignore_unknown = false;
 
   /* setup signal handler */
-  _end_oonf_signal = false;
   setup_signalhandler();
 
   /* parse "early" command line arguments */
@@ -247,10 +246,10 @@ oonf_main(int argc, char **argv, const struct oonf_appdata *appdata) {
 
   if (!oonf_cfg_is_running()) {
     /*
-     * mayor error during late initialization
-     * or maybe the user decided otherwise and pressed CTRL-C
+     * maybe the user decided otherwise and pressed CTRL-C
+     * or the --quit option was used
      */
-    return_code = _end_oonf_signal ? 0 : 1;
+    return_code = 0;
     goto oonf_cleanup;
   }
 
