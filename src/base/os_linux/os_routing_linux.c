@@ -398,6 +398,11 @@ _routing_set(struct os_system_netlink_message *nl_msg, struct os_route *route, u
     route->p.family = netaddr_get_address_family(&route->p.src_ip);
   }
 
+  if (route->p.type == OS_ROUTE_ALL) {
+      /* cannot set meta-type 'route_all' */
+      return -1;
+  }
+
   if (route->p.family == AF_UNSPEC) {
     route->p.family = AF_INET;
   }
