@@ -147,7 +147,7 @@ static struct cfg_schema_entry _l2_entries[] = {
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 255),
+    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 65535),
   CFG_MAP_INT32_MINMAX(
     _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, 0 for all protocols", 0, -1, 255),
   CFG_MAP_INT32_MINMAX(
@@ -173,7 +173,7 @@ static struct cfg_schema_entry _lan_entries[] = {
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 255),
+    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 65535),
   CFG_MAP_INT32_MINMAX(
     _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, 0 for all protocols", 0, -1, 255),
   CFG_MAP_INT32_MINMAX(
@@ -405,7 +405,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
   avl_for_each_element(&_import_tree, import, _node) {
     OONF_DEBUG(LOG_L2_IMPORT, "Check for import: %s", import->name);
 
-    if (import->rttype != route->p.type) {
+    if (import->rttype != OS_ROUTE_ALL && import->rttype != route->p.type) {
       OONF_DEBUG(LOG_L2_IMPORT, "Bad routing type %u (filter was %d)",
                  route->p.type, import->rttype);
       continue;

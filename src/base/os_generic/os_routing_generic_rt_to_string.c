@@ -58,6 +58,7 @@ static const char *_route_types[] = {
   [OS_ROUTE_PROHIBIT] = "prohibit",
   [OS_ROUTE_BLACKHOLE] = "blackhole",
   [OS_ROUTE_NAT] = "nat",
+  [OS_ROUTE_ALL] = "all",
 };
 
 /**

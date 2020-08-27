@@ -131,6 +131,7 @@ enum os_route_type
   OS_ROUTE_PROHIBIT,
   OS_ROUTE_BLACKHOLE,
   OS_ROUTE_NAT,
+  OS_ROUTE_ALL,
   OS_ROUTE_COUNT
 };
 
