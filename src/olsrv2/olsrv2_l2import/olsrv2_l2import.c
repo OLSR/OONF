@@ -97,11 +97,11 @@ static void _cb_cfg_changed(void);
 
 static struct cfg_schema_entry _l2import_entries[] = {
   CFG_MAP_INT32_MINMAX(_l2export_data, domain, "domain", "-1",
-      "domain for the imported LAN entries, -1 for all domains", 0, -1, 255),
+      "domain for the imported LAN entries, -1 for all domains", 0, -1, NHDP_MAXIMUM_DOMAINS),
   CFG_MAP_INT32_MINMAX(_l2export_data, routing_metric, "metric", "-1",
       "routing metric for the imported LAN entries, -1 to calculate from layer2 data", 0, -1, RFC7181_METRIC_MAX),
   CFG_MAP_INT32_MINMAX(_l2export_data, fib_distance, "fib_distance", "2",
-      "fib distance for imported LAN entries, -1 for all domains", 0, 1, 255),
+      "fib distance for imported LAN entries", 0, 1, 255),
 };
 
 static struct cfg_schema_section _l2import_section = {
