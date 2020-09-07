@@ -179,11 +179,14 @@ static struct cfg_schema_entry _lan_entries[] = {
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 65535),
+    _import_entry, table, "table", "-1", "Routing table of matching routes, -1 for matching all tables", 0, -1, 65535),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, 0 for all protocols", 0, -1, 255),
+    _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, -1 for all protocols", 0, -1, 255),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, distance, "metric", "-1", "Metric of matching routes, 0 for all metrics", 0, -1, INT32_MAX),
+    _import_entry, block_protocol, "block_protocol", "-1",
+    "Routing protocol not imported, -1 to not block any protocol", 0, -1, 255),
+  CFG_MAP_INT32_MINMAX(
+    _import_entry, distance, "metric", "-1", "Metric of matching routes, -1 for all metrics", 0, -1, INT32_MAX),
   CFG_MAP_OS_ROUTING_TYPE_KEY(
     _import_entry, rttype, "rttype", "unicast", "Type of routing metric to be imported"),
   CFG_MAP_STRING_ARRAY(_import_entry, fixed_mac_if, "fixed_mac_if", "",
