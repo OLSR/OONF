@@ -105,6 +105,9 @@ struct _import_entry {
   /*! routing type to be imported, nearly always unicast */
   enum os_route_type rttype;
 
+  /*! true if online routes are put into interface_ip db (and non-onlink are ignored) */
+  bool l2net;
+
   /*! set MAC address of imported entries to this interface */
   char fixed_mac_if[IF_NAMESIZE];
 
@@ -160,6 +163,7 @@ static struct cfg_schema_entry _l2_entries[] = {
     _import_entry, distance, "metric", "-1", "Metric of matching routes, -1 for all metrics", 0, -1, INT32_MAX),
   CFG_MAP_OS_ROUTING_TYPE_KEY(
     _import_entry, rttype, "rttype", "unicast", "Type of routing metric to be imported"),
+  CFG_MAP_BOOL(_import_entry, l2net, "l2net", "false", "Put imported onlink routes into interface_ip database"),
   CFG_MAP_STRING_ARRAY(_import_entry, fixed_mac_if, "fixed_mac_if", "",
     "Name of interface that will be used to fill in layer2 entry MAC addresses", IF_NAMESIZE),
   CFG_MAP_STRING_ARRAY(_import_entry, fixed_l2if_name, "fixed_l2if_name", "",
@@ -385,6 +389,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
   char ifname[IF_NAMESIZE];
   struct oonf_layer2_net *l2net;
   struct oonf_layer2_neigh *l2neigh;
+  struct oonf_layer2_peer_address *l2local;
   struct oonf_layer2_neighbor_address *l2neigh_ip;
   struct oonf_layer2_neigh_key nb_key;
   const struct netaddr *gw, *dst, *mac;
@@ -414,6 +419,13 @@ _cb_rt_event(const struct os_route *route, bool set) {
   avl_for_each_element(&_import_tree, import, _node) {
     OONF_DEBUG(LOG_L2_IMPORT, "Check for import: %s", import->name);
 
+    /* ignore "offlink" routes for l2net import */
+    if (import->l2net && !netaddr_is_unspec(&route->p.gw)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "Route was not onlink");
+      continue;
+    }
+
+    /* check type of route */
     if (import->rttype != OS_ROUTE_ALL && import->rttype != route->p.type) {
       OONF_DEBUG(LOG_L2_IMPORT, "Bad routing type %u (filter was %d)",
                  route->p.type, import->rttype);
@@ -493,60 +505,74 @@ _cb_rt_event(const struct os_route *route, bool set) {
       continue;
     }
 
-    mac = NULL;
-    macifname = "";
-    if (import->fixed_mac_if[0]) {
-      if (import->fixed_if_listener.data) {
-        mac = &import->fixed_if_listener.data->mac;
-        macifname = import->fixed_if_listener.data->name;
-      }
-    }
-    else {
-      mac = &l2net->if_listener.data->mac;
-      macifname = l2net->if_listener.data->name;
-    }
-    if (netaddr_is_unspec(mac)) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Wait for interface (%s) data to be initialized", macifname);
-      if (!oonf_timer_is_active(&_route_reload_instance)) {
-        oonf_timer_set(&_route_reload_instance, 1000);
-      }
-      continue;
-    }
-
     dst = &route->p.key.dst;
-    gw = &route->p.gw;
 
-    l2neigh_ip = _remove_old_entries(l2net, import, gw, dst);
-    l2neigh = NULL;
-    /* get layer2 neighbor */
-    if (set && !l2neigh_ip) {
-      /* generate l2 key including LID */
-      if (oonf_layer2_neigh_generate_lid(&nb_key, &import->l2origin, mac)) {
-        OONF_WARN(LOG_L2_IMPORT, "Could not generate LID for MAC %s (if %s)",
-            netaddr_to_string(&nbuf, mac), macifname);
+    if (import->l2net) {
+      l2local = oonf_layer2_net_get_local_ip(l2net, dst);
+      if (set && l2local == NULL) {
+        OONF_DEBUG(LOG_L2_IMPORT, "Set new l2net prefix: %s", netaddr_to_string(&nbuf, dst));
+        oonf_layer2_net_add_ip(l2net, &import->l2origin, dst);
+      }
+      else if (!set && l2local != NULL) {
+        OONF_DEBUG(LOG_L2_IMPORT, "Remove l2net prefix: %s", netaddr_to_string(&nbuf, dst));
+        oonf_layer2_net_remove_ip(l2local, &import->l2origin);
+      }
+    }
+    else{
+      mac = NULL;
+      macifname = "";
+      if (import->fixed_mac_if[0]) {
+        if (import->fixed_if_listener.data) {
+          mac = &import->fixed_if_listener.data->mac;
+          macifname = import->fixed_if_listener.data->name;
+        }
+      }
+      else {
+        mac = &l2net->if_listener.data->mac;
+        macifname = l2net->if_listener.data->name;
+      }
+      if (netaddr_is_unspec(mac)) {
+        OONF_DEBUG(LOG_L2_IMPORT, "Wait for interface (%s) data to be initialized", macifname);
+        if (!oonf_timer_is_active(&_route_reload_instance)) {
+          oonf_timer_set(&_route_reload_instance, 1000);
+        }
         continue;
       }
 
-      l2neigh = oonf_layer2_neigh_add_lid(l2net, &nb_key);
-      if (!l2neigh) {
-        OONF_DEBUG(LOG_L2_IMPORT, "No l2 neighbor found");
-        continue;
-      }
+      gw = &route->p.gw;
 
-      OONF_DEBUG(LOG_L2_IMPORT, "Import layer2 neighbor...");
+      l2neigh_ip = _remove_old_entries(l2net, import, gw, dst);
+      l2neigh = NULL;
+      /* get layer2 neighbor */
+      if (set && !l2neigh_ip) {
+        /* generate l2 key including LID */
+        if (oonf_layer2_neigh_generate_lid(&nb_key, &import->l2origin, mac)) {
+          OONF_WARN(LOG_L2_IMPORT, "Could not generate LID for MAC %s (if %s)",
+              netaddr_to_string(&nbuf, mac), macifname);
+          continue;
+        }
 
-      /* make sure next hop is initialized */
-      oonf_layer2_neigh_set_nexthop(l2neigh, gw);
-      if (!oonf_layer2_neigh_get_remote_ip(l2neigh, dst)) {
-        oonf_layer2_neigh_add_ip(l2neigh, &import->l2origin, dst);
+        l2neigh = oonf_layer2_neigh_add_lid(l2net, &nb_key);
+        if (!l2neigh) {
+          OONF_DEBUG(LOG_L2_IMPORT, "No l2 neighbor found");
+          continue;
+        }
+
+        OONF_DEBUG(LOG_L2_IMPORT, "Import layer2 neighbor...");
+
+        /* make sure next hop is initialized */
+        oonf_layer2_neigh_set_nexthop(l2neigh, gw);
+        if (!oonf_layer2_neigh_get_remote_ip(l2neigh, dst)) {
+          oonf_layer2_neigh_add_ip(l2neigh, &import->l2origin, dst);
+        }
+        oonf_layer2_neigh_commit(l2neigh);
       }
-      oonf_layer2_neigh_commit(l2neigh);
-    }
-    else if (!set && l2neigh_ip) {
-      l2neigh = l2neigh_ip->l2neigh;
-      oonf_layer2_neigh_remove_ip(l2neigh_ip, &import->l2origin);
-      oonf_layer2_neigh_commit(l2neigh);
-    }
+      else if (!set && l2neigh_ip) {
+        l2neigh = l2neigh_ip->l2neigh;
+        oonf_layer2_neigh_remove_ip(l2neigh_ip, &import->l2origin);
+        oonf_layer2_neigh_commit(l2neigh);
+      }
+      }
   }
 }
 
