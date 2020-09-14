@@ -184,6 +184,7 @@ void
 dlep_session_remove(struct dlep_session *session) {
   struct dlep_parser_tlv *tlv, *tlv_it;
   struct dlep_session_parser *parser;
+  struct oonf_layer2_net *l2net;
 #ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str nbuf;
 #endif
@@ -193,6 +194,13 @@ dlep_session_remove(struct dlep_session *session) {
 
   netaddr_socket_invalidate(&session->local_socket);
   netaddr_socket_invalidate(&session->remote_socket);
+
+  /* cleanup values set by DLEP */
+  l2net = oonf_layer2_net_get(session->l2_listener.name);
+  if (l2net) {
+    oonf_layer2_net_cleanup(l2net, session->l2_origin, true);
+    oonf_layer2_net_cleanup(l2net, session->l2_default_origin, true);
+  }
 
   os_interface_remove(&session->l2_listener);
 
