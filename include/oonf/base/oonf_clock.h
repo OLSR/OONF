@@ -212,7 +212,7 @@ oonf_clock_fromIntervalString(uint64_t *result, const char *string) {
   int64_t t;
   int r;
 
-  r = isonumber_to_s64(&t, string, 1000);
+  r = isonumber_to_s64(&t, string, NULL, 1000);
   if (r == 0) {
     *result = t;
   }
