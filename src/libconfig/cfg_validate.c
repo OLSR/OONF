@@ -151,7 +151,7 @@ cfg_validate_int(struct autobuf *out, const char *section_name, const char *entr
   struct isonumber_str hbuf;
 
   for (j = 0, scaling = 1; j < fraction; j++, scaling*=10);
-  if (isonumber_to_s64(&i, value, scaling)) {
+  if (isonumber_to_s64(&i, value, NULL, scaling)) {
     if (fraction) {
       cfg_append_printable_line(out,
         "Value '%s' for entry '%s'"

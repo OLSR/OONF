@@ -296,7 +296,7 @@ oonf_layer2_data_parse_string(
 
   switch (meta->type) {
     case OONF_LAYER2_INTEGER_DATA:
-      return isonumber_to_s64(&value->integer, input, meta->scaling);
+      return isonumber_to_s64(&value->integer, input, meta->unit, meta->scaling);
 
     case OONF_LAYER2_BOOLEAN_DATA:
       if (!cfg_is_bool(input)) {
@@ -1432,6 +1432,23 @@ oonf_layer2_tobin_mac_lid(const struct cfg_schema_entry *s_entry, const struct c
 const char *
 oonf_layer2_net_get_type_name(enum oonf_layer2_network_type type) {
   return _network_type[type];
+}
+
+/**
+ * get network type from string
+ * @param name type name
+ * @return oonf_layer2_network_type, undefined if unknown string
+ */
+enum oonf_layer2_network_type
+oonf_layer2_get_type(const char *name) {
+  enum oonf_layer2_network_type type;
+
+  for (type = 0; type < OONF_LAYER2_TYPE_COUNT; type++) {
+    if (strcmp(_network_type[type], name) == 0) {
+      return type;
+    }
+  }
+  return OONF_LAYER2_TYPE_UNDEFINED;
 }
 
 /**

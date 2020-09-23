@@ -107,7 +107,7 @@ test_isonumber_to_u64_from_string(void) {
   for (scaling = 1; scaling <= 64; scaling *= 4) {
     for (i=0; i<ARRAYSIZE(tests); i++) {
       result = 0;
-      tmp = isonumber_to_u64(&result, tests[i], scaling);
+      tmp = isonumber_to_u64(&result, tests[i], NULL, scaling);
       CHECK_TRUE(tmp == 0, "isonumber_to_u64(\"%s\") failed", tests[i]);
       if (!tmp) {
         CHECK_TRUE(result == results[i]*scaling, "isonumber_to_u64(\"%s\") != %"PRIu64" (was %"PRIu64")",
@@ -138,7 +138,37 @@ test_isonumber_to_s64_from_string(void) {
 
   for (i=0; i<ARRAYSIZE(tests); i++) {
     result = 0;
-    tmp = isonumber_to_s64(&result, tests[i], 1);
+    tmp = isonumber_to_s64(&result, tests[i], NULL, 1);
+    CHECK_TRUE(tmp == 0, "isonumber_to_u64(\"%s\") failed", tests[i]);
+    if (!tmp) {
+      CHECK_TRUE(result== results[i], "isonumber_to_u64(\"%s\") != %"PRId64" (was %"PRId64")",
+          tests[i], results[i], result);
+    }
+  }
+  END_TEST();
+}
+
+static void
+test_isonumber_to_s64_from_string_unit(void) {
+  static const char *tests[] = {
+       "1k s",  "1.024k s",  "1Ms",  "1.024Ms",  "1.023k s",
+      "-1ks", "-1.024k s", "-1Ms", "-1.024M s", "-1.023k s",
+  };
+  static int64_t results[] = {
+       1000,  1024,  1000*1000,  1000*1024,  1023,
+      -1000, -1024, -1000*1000, -1000*1024, -1023,
+  };
+
+  size_t i;
+
+  int64_t result;
+  int tmp;
+
+  START_TEST();
+
+  for (i=0; i<ARRAYSIZE(tests); i++) {
+    result = 0;
+    tmp = isonumber_to_s64(&result, tests[i], "s", 1);
     CHECK_TRUE(tmp == 0, "isonumber_to_u64(\"%s\") failed", tests[i]);
     if (!tmp) {
       CHECK_TRUE(result== results[i], "isonumber_to_u64(\"%s\") != %"PRId64" (was %"PRId64")",
@@ -168,7 +198,7 @@ test_isonumber_to_s64_from_string_2(void) {
 
   for (i=0; i<ARRAYSIZE(tests); i++) {
     result = 0;
-    tmp = isonumber_to_s64(&result, tests[i], 1000000000);
+    tmp = isonumber_to_s64(&result, tests[i], NULL, 1000000000);
     CHECK_TRUE(tmp == 0, "isonumber_to_u64(\"%s\") failed", tests[i]);
     if (!tmp) {
       CHECK_TRUE(result== results[i], "isonumber_to_u64(\"%s\") != %"PRId64" (was %"PRId64")",
@@ -232,6 +262,7 @@ main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))) {
   test_isonumber_to_u64_from_string();
   test_str_from_isonumber_s64();
   test_isonumber_to_s64_from_string();
+  test_isonumber_to_s64_from_string_unit();
   test_isonumber_to_s64_from_string_2();
   test_str_from_isonumber_s64_2();
 
