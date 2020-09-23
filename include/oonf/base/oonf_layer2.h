@@ -718,6 +718,7 @@ EXPORT void oonf_layer2_help_mac_lid(const struct cfg_schema_entry *entry, struc
 EXPORT int oonf_layer2_tobin_mac_lid(const struct cfg_schema_entry *s_entry, const struct const_strarray *value, void *reference);
 
 EXPORT const char *oonf_layer2_net_get_type_name(enum oonf_layer2_network_type);
+EXPORT enum oonf_layer2_network_type oonf_layer2_get_type(const char *name);
 
 EXPORT struct avl_tree *oonf_layer2_get_net_tree(void);
 EXPORT struct avl_tree *oonf_layer2_get_origin_tree(void);
@@ -735,6 +736,18 @@ static INLINE bool
 oonf_layer2_origin_is_added(const struct oonf_layer2_origin *origin) {
   return avl_is_node_added(&origin->_node);
 }
+
+/**
+ * Get a layer-2 origin object from the database
+ * @param ifname name of origin
+ * @return origin object, NULL if not found
+ */
+static INLINE struct oonf_layer2_origin *
+oonf_layer2_origin_get(const char *name) {
+  struct oonf_layer2_origin *l2origin;
+  return avl_find_element(oonf_layer2_get_origin_tree(), name, l2origin, _node);
+}
+
 
 /**
  * Get a layer-2 interface object from the database

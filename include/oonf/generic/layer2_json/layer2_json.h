@@ -43,25 +43,10 @@
  * @file
  */
 
-#ifndef ISONUMBER_H_
-#define ISONUMBER_H_
+#ifndef LAYER2JSON_H_
+#define LAYER2JSON_H_
 
-#include <oonf/oonf.h>
+/*! subsystem identifier */
+#define OONF_LAYER2JSON_SUBSYSTEM "layer2_json"
 
-/**
- * buffer for the string representation of a fractional
- * number with iso prefix.
- */
-struct isonumber_str {
-  /*! buffer for longest possibloe iso prefixed number */
-  char buf[48];
-};
-
-EXPORT const char *isonumber_from_u64(
-  struct isonumber_str *out, uint64_t number, const char *unit, uint64_t scaling, bool raw);
-EXPORT const char *isonumber_from_s64(
-  struct isonumber_str *out, int64_t number, const char *unit, uint64_t scaling, bool raw);
-EXPORT int isonumber_to_u64(uint64_t *dst, const char *iso, const char *unit, uint64_t scaling);
-EXPORT int isonumber_to_s64(int64_t *dst, const char *iso, const char *unit, uint64_t scaling);
-
-#endif /* ISONUMBER_H_ */
+#endif /* LAYER2JSON_H_ */

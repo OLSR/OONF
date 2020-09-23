@@ -293,7 +293,7 @@ _parse_strarray(struct strarray *array, const char *ifname, enum oonf_layer2_nei
 
   strarray_for_each_element(array, entry) {
     ptr = str_cpynextword(hbuf.buf, entry, sizeof(hbuf));
-    if (isonumber_to_s64(&value, hbuf.buf, meta->scaling)) {
+    if (isonumber_to_s64(&value, hbuf.buf, meta->unit, meta->scaling)) {
       continue;
     }
 

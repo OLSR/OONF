@@ -43,25 +43,17 @@
  * @file
  */
 
-#ifndef ISONUMBER_H_
-#define ISONUMBER_H_
+#ifndef LAYER2JSON_INTERNAL_H_
+#define LAYER2JSON_INTERNAL_H_
 
-#include <oonf/oonf.h>
+#include <oonf/libcore/oonf_logging.h>
+#include <oonf/base/oonf_telnet.h>
 
-/**
- * buffer for the string representation of a fractional
- * number with iso prefix.
- */
-struct isonumber_str {
-  /*! buffer for longest possibloe iso prefixed number */
-  char buf[48];
-};
+int l2json_export(struct oonf_telnet_data *con);
+int l2json_import(struct oonf_telnet_data *con, const char *input);
+void l2json_import_init(enum oonf_log_source log);
+void l2json_import_cleanup(void);
+void l2json_export_init(enum oonf_log_source log);
+void l2json_export_cleanup(void);
 
-EXPORT const char *isonumber_from_u64(
-  struct isonumber_str *out, uint64_t number, const char *unit, uint64_t scaling, bool raw);
-EXPORT const char *isonumber_from_s64(
-  struct isonumber_str *out, int64_t number, const char *unit, uint64_t scaling, bool raw);
-EXPORT int isonumber_to_u64(uint64_t *dst, const char *iso, const char *unit, uint64_t scaling);
-EXPORT int isonumber_to_s64(int64_t *dst, const char *iso, const char *unit, uint64_t scaling);
-
-#endif /* ISONUMBER_H_ */
+#endif /* LAYER2JSON_INTERNAL_H_ */

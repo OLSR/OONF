@@ -50,6 +50,7 @@
 #include <oonf/libcommon/isonumber.h>
 #include <oonf/libcommon/string.h>
 
+static int64_t _get_scale(const char *text, const char *unit);
 static const char *_isonumber_u64_to_string(
   char *out, size_t out_len, uint64_t number, const char *unit, uint64_t scaling, bool raw);
 
@@ -118,11 +119,12 @@ isonumber_from_s64(struct isonumber_str *out, int64_t number, const char *unit, 
  * to a signed 64bit integer.
  * @param dst pointer to destination variable
  * @param iso pointer to string source
+ * @param unit (optional) iso unit allowed at the end of the number
  * @param scaling fixed point integer arithmetics scaling factor
  * @return -1 if an error happened, 0 otherwise
  */
 int
-isonumber_to_s64(int64_t *dst, const char *iso, uint64_t scaling) {
+isonumber_to_s64(int64_t *dst, const char *iso, const char *unit, uint64_t scaling) {
   const char *ptr;
   int result;
   uint64_t u64;
@@ -132,7 +134,7 @@ isonumber_to_s64(int64_t *dst, const char *iso, uint64_t scaling) {
     ptr++;
   }
 
-  result = isonumber_to_u64(&u64, ptr, scaling);
+  result = isonumber_to_u64(&u64, ptr, unit, scaling);
   if (!result) {
     if (*iso == '-') {
       *dst = -((int64_t)u64);
@@ -149,20 +151,19 @@ isonumber_to_s64(int64_t *dst, const char *iso, uint64_t scaling) {
  * to an unsigned 64bit integer.
  * @param dst pointer to destination variable
  * @param iso pointer to string source
+ * @param unit (optional) iso unit allowed at the end of the number
  * @param scaling fixed point integer arithmetics scaling factor
  * @return -1 if an error happened, 0 otherwise
  */
 int
-isonumber_to_u64(uint64_t *dst, const char *iso, uint64_t scaling) {
-  static const char symbol_large[] = " kMGTPE";
-  static const char symbol_small[] = " munpfa";
-
+isonumber_to_u64(uint64_t *dst, const char *iso, const char *unit, uint64_t scaling) {
   uint64_t num, fraction_scale, factor;
-  char *next = NULL, *prefix;
+  int64_t scale;
+  char *next = NULL;
 
   errno = 0;
   num = strtoull(iso, &next, 10);
-  if (errno) {
+  if (errno || next == iso) {
     return -1;
   }
 
@@ -197,32 +198,16 @@ isonumber_to_u64(uint64_t *dst, const char *iso, uint64_t scaling) {
     next++;
   }
 
-  factor = 1;
-  if (*next) {
-    /* handle iso-prefix */
-    if (next[1] != 0) {
-      return -1;
-    }
-
-    prefix = strchr(symbol_large, next[0]);
-    if (prefix) {
-      while (prefix > symbol_large) {
-        factor *= 1000;
-        prefix--;
-      }
-    }
-    else {
-      prefix = strchr(symbol_small, next[0]);
-      if (prefix) {
-        while (prefix > symbol_small) {
-          fraction_scale *= 1000;
-          prefix--;
-        }
-      }
-      else {
-        return -1;
-      }
-    }
+  scale = _get_scale(next, unit);
+  if (scale > 0) {
+    factor = scale;
+  }
+  else if (scale < 0) {
+    factor = 1;
+    fraction_scale = fraction_scale * (-scale);
+  }
+  else {
+    return -1;
   }
 
   while (fraction_scale > scaling && fraction_scale >= 1000) {
@@ -241,6 +226,68 @@ isonumber_to_u64(uint64_t *dst, const char *iso, uint64_t scaling) {
   }
 
   *dst = num * factor * scaling / fraction_scale;
+  return 0;
+}
+
+/**
+ * Derive the scaling depending on the iso prefix.
+ * Ignore whitespaces and a trailing unit if present.
+ * @param text the text to parse
+ * @param unit unit string or NULL
+ * @return positive scaling factor, negative fractional scaling,
+ *   0 for error.
+ */
+static int64_t
+_get_scale(const char *text, const char *unit) {
+  static const char symbol_large[] = " kMGTPE";
+  static const char symbol_small[] = " munpfa";
+
+  const char *prefix;
+  int64_t factor;
+
+  factor = 1;
+
+  /* skip whitespaces */
+  while (*text == ' ') {
+    text++;
+  }
+
+  /* Look for prefixes for large numbers */
+  if (*text) {
+    prefix = strchr(symbol_large, text[0]);
+    if (prefix) {
+      factor = 1;
+      while (prefix > symbol_large) {
+        factor *= 1000;
+        prefix--;
+      }
+      text++;
+    }
+    else {
+      /* look for prefixes for small numbers */
+      prefix = strchr(symbol_small, text[0]);
+      if (prefix) {
+        factor = -1;
+        while (prefix > symbol_small) {
+          factor *= 1000;
+          prefix--;
+        }
+        text++;
+      }
+    }
+  }
+
+  /* skip whitespaces again, just to be sure */
+  while (*text == ' ') {
+    text++;
+  }
+
+  /* the end is either the unit or just nothing */
+  if (*text == 0 || (unit != NULL && strcasecmp(text, unit) == 0)) {
+    return factor;
+  }
+
+  /* bad result */
   return 0;
 }
 

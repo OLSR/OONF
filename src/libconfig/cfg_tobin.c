@@ -116,7 +116,7 @@ cfg_tobin_int(void *reference, size_t bin_size, const struct const_strarray *val
 
   for (j = 0, scaling = 1; j < fraction; j++, scaling*=10);
 
-  result = isonumber_to_s64(&i, strarray_get_first_c(value), scaling);
+  result = isonumber_to_s64(&i, strarray_get_first_c(value), NULL, scaling);
   if (result == 0) {
     switch (int_size) {
       case 4:
