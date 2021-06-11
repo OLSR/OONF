@@ -215,6 +215,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   uint16_t ansn;
   uint8_t tmp;
   int af_type;
+  bool seqno_reset;
 #ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
@@ -295,7 +296,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   }
 
   /* test if we already processed the message */
-  if (!olsrv2_mpr_shall_process(context, _current.vtime)) {
+  seqno_reset = false;
+  if (!olsrv2_mpr_shall_process(context, _current.vtime, &seqno_reset)) {
     OONF_DEBUG(LOG_OLSRV2_R, "Processing set says 'do not process'");
     return RFC5444_DROP_MSG_BUT_FORWARD;
   }
@@ -309,13 +311,13 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* check if the topology information is recent enough */
   if (_current.complete_tc) {
-    if (rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
+    if (!seqno_reset && rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
       OONF_DEBUG(LOG_OLSRV2_R, "ANSN %u is smaller than last stored ANSN %u", ansn, _current.node->ansn);
       return RFC5444_DROP_MSG_BUT_FORWARD;
     }
   }
   else {
-    if (!rfc5444_seqno_is_larger(ansn, _current.node->ansn)) {
+    if (!seqno_reset && !rfc5444_seqno_is_larger(ansn, _current.node->ansn)) {
       OONF_DEBUG(LOG_OLSRV2_R, "ANSN %u is smaller than last stored ANSN %u", ansn, _current.node->ansn);
       return RFC5444_DROP_MSG_BUT_FORWARD;
     }
