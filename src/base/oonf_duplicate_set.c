@@ -319,7 +319,7 @@ _test(struct oonf_duplicate_set *dupset, struct oonf_duplicate_entry *entry, uin
       entry->too_old_count = 0;
       entry->current = seqno;
 
-      return OONF_DUPSET_RESET;
+      return OONF_DUPSET_NEWEST;
     }
     return OONF_DUPSET_TOO_OLD;
   }
