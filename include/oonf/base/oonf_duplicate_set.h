@@ -86,6 +86,9 @@ enum oonf_duplicate_result
   /*! newer than the latest cached number */
   OONF_DUPSET_NEWEST,
 
+  /*! sequence number was reset */
+  OONF_DUPSET_RESET,
+
   /*! sequence number was the first tested with the duplicate set */
   OONF_DUPSET_FIRST,
 };
@@ -180,7 +183,7 @@ EXPORT const char *oonf_duplicate_get_result_str(enum oonf_duplicate_result);
  */
 static INLINE bool
 oonf_duplicate_is_new(enum oonf_duplicate_result result) {
-  return result == OONF_DUPSET_NEW || result == OONF_DUPSET_NEWEST || result == OONF_DUPSET_FIRST;
+  return result == OONF_DUPSET_NEW || result == OONF_DUPSET_NEWEST || result == OONF_DUPSET_RESET || result == OONF_DUPSET_FIRST;
 }
 
 #endif /* OONF_DUPLICATE_SET_H_ */

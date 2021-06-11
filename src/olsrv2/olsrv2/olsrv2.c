@@ -384,10 +384,11 @@ olsrv2_is_routable(struct netaddr *addr) {
  * to MPR settings.
  * @param context RFC5444 tlvblock reader context
  * @param vtime validity time for duplicate entry data
+ * @param reset pointer to boolean that will tell if the sequence number was reset
  * @return true if TC should be processed, false otherwise
  */
 bool
-olsrv2_mpr_shall_process(struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
+olsrv2_mpr_shall_process(struct rfc5444_reader_tlvblock_context *context, uint64_t vtime, bool *reset) {
   enum oonf_duplicate_result dup_result;
   bool process;
 #ifdef OONF_LOG_DEBUG_INFO
@@ -407,6 +408,9 @@ olsrv2_mpr_shall_process(struct rfc5444_reader_tlvblock_context *context, uint64
   dup_result = oonf_duplicate_entry_add(&_protocol->processed_set, context->msg_type, &context->orig_addr,
     context->seqno, vtime + _olsrv2_config.f_hold_time);
   process = oonf_duplicate_is_new(dup_result);
+  if (reset != NULL) {
+    *reset = dup_result == OONF_DUPSET_RESET;
+  }
 
   OONF_DEBUG(LOG_OLSRV2,
     "Do %sprocess message type %u from %s"
