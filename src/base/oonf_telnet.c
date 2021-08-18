@@ -436,9 +436,16 @@ _cb_telnet_receive_data(struct oonf_stream_session *session) {
 
       /* handle difference between multicommand and singlecommand mode */
       if (chainCommands) {
-        next = strchr(cmd, '/');
-        if (next) {
-          *next++ = 0;
+        if (cmd[0] == '/') {
+          // double '/' means single command and autoquit
+          cmd++;
+          next = NULL;
+        }
+        else {
+          next = strchr(cmd, '/');
+          if (next) {
+            *next++ = 0;
+          }
         }
       }
       para = strchr(cmd, ' ');
