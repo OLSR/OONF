@@ -135,6 +135,30 @@ _cb_layer2json(struct oonf_telnet_data *con) {
       return TELNET_RESULT_INTERNAL_ERROR;
     }
   }
+  if ((second = str_hasnextword(con->parameter, "replace"))) {
+    char originname[32];
+    const char *third;
+    struct oonf_layer2_origin *origin;
+
+    third = str_cpynextword(originname, second, sizeof(originname));
+    if (!third) {
+        abuf_appendf(con->out, "Error, no origin provided");
+        return TELNET_RESULT_ACTIVE;
+    }
+
+    origin = oonf_layer2_origin_get(originname);
+    if (origin) {
+      struct oonf_layer2_net *l2net, *l2net_it;
+
+      avl_for_each_element_safe(oonf_layer2_get_net_tree(), l2net, _node, l2net_it) {
+        oonf_layer2_net_remove(l2net, origin);
+      }
+    }
+
+    if (l2json_import(con, third)) {
+      return TELNET_RESULT_INTERNAL_ERROR;
+    }
+  }
 
   return 0;
 }
