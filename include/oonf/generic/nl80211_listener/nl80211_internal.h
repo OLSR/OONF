@@ -49,6 +49,6 @@
 #include <oonf/libcore/oonf_logging.h>
 
 /* headers only for use inside the NL80211 subsystem */
-enum oonf_log_source LOG_NL80211;
+extern enum oonf_log_source LOG_NL80211;
 
 #endif /* NL80211_INTERNAL_H_ */

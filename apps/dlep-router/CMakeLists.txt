@@ -49,8 +49,8 @@ IF (NOT OONF_STATIC_PLUGINS)
                              remotecontrol
                              layer2_config
                              layer2_export
-                             dns_query
-                             dns_sd
+#                             dns_query
+#                             dns_sd
                              dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)

@@ -49,13 +49,13 @@
 #include <oonf/libcore/oonf_logging.h>
 
 /* headers only for use inside the generic DLEP code */
-enum oonf_log_source LOG_DLEP;
+extern enum oonf_log_source LOG_DLEP;
 
 /* headers only for use inside the DLEP_RADIO code*/
-enum oonf_log_source LOG_DLEP_RADIO;
+extern enum oonf_log_source LOG_DLEP_RADIO;
 
 /* headers only for use inside the DLEP_ROUTER code*/
-enum oonf_log_source LOG_DLEP_ROUTER;
+extern enum oonf_log_source LOG_DLEP_ROUTER;
 
 #endif /* DLEP_INTERNAL_H_ */
 

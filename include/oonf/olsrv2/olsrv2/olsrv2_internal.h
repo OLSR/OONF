@@ -50,9 +50,9 @@
 #include <oonf/libcore/oonf_logging.h>
 
 /* headers only for use inside the OLSRv2 subsystem */
-EXPORT enum oonf_log_source LOG_OLSRV2;
-EXPORT enum oonf_log_source LOG_OLSRV2_R;
-EXPORT enum oonf_log_source LOG_OLSRV2_ROUTING;
-EXPORT enum oonf_log_source LOG_OLSRV2_W;
+extern enum oonf_log_source LOG_OLSRV2;
+extern enum oonf_log_source LOG_OLSRV2_R;
+extern enum oonf_log_source LOG_OLSRV2_ROUTING;
+extern enum oonf_log_source LOG_OLSRV2_W;
 
 #endif /* OLSRV2_INTERNAL_H_ */
