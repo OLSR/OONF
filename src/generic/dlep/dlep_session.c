@@ -919,6 +919,13 @@ _parse_tlvstream(struct dlep_session *session, const uint8_t *buffer, size_t len
       return DLEP_NEW_PARSER_INCOMPLETE_TLV;
     }
 
+    /* if TLV=20, we'll ignore it */
+    if (tlv_type == 20) {
+      OONF_WARN(session->log_source, "ignore unsupported TLV 20");
+      idx += tlv_length;
+      continue;
+    }
+
     /* check if tlv is supported */
     tlv = dlep_parser_get_tlv(parser, tlv_type);
     if (!tlv) {
