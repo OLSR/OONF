@@ -33,8 +33,8 @@ Assuming your interfaces you want olsrd2 to listen on are ``eth0, wlan0 and lo``
 
 You won't see much output though. You can enable more output (by default it comes on stderr) for several subsystems. You can get a list of these subsystems with:
 
-  * ``./olsrd2_static --schema=log.info``
-  * ``./olsrd2_static --schema=log.debug``
+  * ``./olsrd2_static --schema=logging.info``
+  * ``./olsrd2_static --schema=logging.debug``
 
 This shows you which info and debug schemas exist. Let's say we are interested in the neighborhood disovery protocol (NHDP, RFC6130, "Hello messages"). We can set this subsystem writing actions to debug level via:
 
