@@ -49,6 +49,6 @@
 #include <oonf/libcore/oonf_logging.h>
 
 /* headers only for use inside the DLEP_RADIO subsystem */
-enum oonf_log_source LOG_DLEP_RADIO;
+extern enum oonf_log_source LOG_DLEP_RADIO;
 
 #endif /* DLEP_RADIO_INTERNAL_H_ */

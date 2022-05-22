@@ -49,6 +49,6 @@
 #include <oonf/libcore/oonf_logging.h>
 
 /* headers only for use inside the DLEP_ROUTER subsystem */
-enum oonf_log_source LOG_DLEP_ROUTER;
+extern enum oonf_log_source LOG_DLEP_ROUTER;
 
 #endif /* DLEP_ROUTER_INTERNAL_H_ */
