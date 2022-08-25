@@ -85,6 +85,7 @@ static const uint16_t _peer_update_tlvs[] = {
   DLEP_RESOURCES_TLV,
   DLEP_RLQR_TLV,
   DLEP_RLQT_TLV,
+  DLEP_MTU_TLV,
 };
 
 /* destination up/update */
