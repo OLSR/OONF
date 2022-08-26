@@ -204,7 +204,7 @@ handler_add_two_sections(void) {
 
   n1 = handler_1.post->name != NULL && strcmp(handler_1.post->name, NAME_1) == 0;
   n2 = handler_1.post->name != NULL && strcmp(handler_1.post->name, NAME_2) == 0;
-  CHECK_TRUE(n1 || n2, "Illegal name of changed section: %s", handler_1.post->name);
+  CHECK_TRUE(n1 || n2, "Illegal name of changed section: %s", handler_1.post->name ? handler_1.post->name : "NULL");
 
   if (n1) {
     CHECK_TRUE(!callback_marker[0], "section with first name triggered twice");
@@ -320,7 +320,7 @@ handler_remove_two_sections(void) {
 
   n1 = handler_1.pre->name != NULL && strcmp(handler_1.pre->name, NAME_1) == 0;
   n2 = handler_1.pre->name != NULL && strcmp(handler_1.pre->name, NAME_2) == 0;
-  CHECK_TRUE(n1 || n2, "Illegal name of changed section: %s", handler_1.pre->name);
+  CHECK_TRUE(n1 || n2, "Illegal name of changed section: %s", handler_1.pre->name ? handler_1.pre->name : "NULL");
 
   if (n1) {
     CHECK_TRUE(!callback_marker[0], "section with first name triggered twice");
