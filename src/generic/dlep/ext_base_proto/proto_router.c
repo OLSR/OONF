@@ -288,7 +288,7 @@ _router_process_peer_offer(struct dlep_extension *ext __attribute__((unused)), s
       ip = os_interface_get_prefix_from_dst(&addr, ifdata);
       if (ip) {
         result = &ip->address;
-        netaddr_socket_init(&remote, &addr, port, ifdata->index);
+        netaddr_socket_init(&remote, &addr, port, session->dlep_if_index);
       }
     }
     value = dlep_session_get_next_tlv_value(session, value);
@@ -308,7 +308,7 @@ _router_process_peer_offer(struct dlep_extension *ext __attribute__((unused)), s
       ip = os_interface_get_prefix_from_dst(&addr, ifdata);
       if (ip) {
         result = &ip->address;
-        netaddr_socket_init(&remote, &addr, port, ifdata->index);
+        netaddr_socket_init(&remote, &addr, port, session->dlep_if_index);
       }
     }
     value = dlep_session_get_next_tlv_value(session, value);
@@ -324,11 +324,11 @@ _router_process_peer_offer(struct dlep_extension *ext __attribute__((unused)), s
       return DLEP_NEW_PARSER_INTERNAL_ERROR;
     }
     result = &ip->address;
-    netaddr_socket_init(&remote, &addr, port, ifdata->index);
+    netaddr_socket_init(&remote, &addr, port, session->dlep_if_index);
   }
 
   /* initialize session */
-  netaddr_socket_init(&local, result, 0, ifdata->index);
+  netaddr_socket_init(&local, result, 0, session->dlep_if_index);
 
   router_if = dlep_router_get_by_layer2_if(ifdata->name);
   if (router_if && &router_if->interf.session == session) {
