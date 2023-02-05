@@ -224,6 +224,9 @@ _cb_receive_udp(struct oonf_packet_socket *pkt, union netaddr_socket *from, void
   /* copy socket information */
   memcpy(&interf->session.remote_socket, from, sizeof(interf->session.remote_socket));
 
+  /* save the interface index of the interface, the DLEP session offer came from */
+  interf->session.dlep_if_index = pkt->os_if->index;
+
   processed = dlep_session_process_buffer(&interf->session, buffer, length, true);
   if (processed < 0) {
     /* Session is now most likely invalid */
