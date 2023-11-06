@@ -356,6 +356,9 @@ struct dlep_session {
 
   /*! remember all streams bound to an interface */
   struct avl_node _node;
+
+  /*! interface index of the interface, the DLEP offer came from */
+  unsigned dlep_if_index;
 };
 
 void dlep_session_init(void);
