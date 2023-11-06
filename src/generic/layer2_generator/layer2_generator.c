@@ -201,7 +201,7 @@ _cb_l2gen_event(struct oonf_timer_instance *ptr __attribute((unused))) {
   struct netaddr_str buf1;
 #endif
 
-  if (oonf_layer2_origin_is_added(&_origin)) {
+  if (!oonf_layer2_origin_is_added(&_origin)) {
     return;
   }
 
