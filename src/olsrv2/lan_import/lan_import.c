@@ -64,7 +64,7 @@
 #include <oonf/olsrv2/lan_import/lan_import.h>
 
 /* definitions */
-#define LOG_LAN_IMPORT _import_subsystem.logging
+#define LOG_LAN_IMPORT _olsrv2_lan_import_subsystem.logging
 
 /**
  * configuration of one LAN import instance
@@ -195,7 +195,7 @@ static const char *_dependencies[] = {
   OONF_OLSRV2_SUBSYSTEM,
   OONF_OS_ROUTING_SUBSYSTEM,
 };
-static struct oonf_subsystem _import_subsystem = {
+static struct oonf_subsystem _olsrv2_lan_import_subsystem = {
   .name = OONF_LAN_IMPORT_SUBSYSTEM,
   .dependencies = _dependencies,
   .dependencies_count = ARRAYSIZE(_dependencies),
@@ -208,7 +208,7 @@ static struct oonf_subsystem _import_subsystem = {
   .cleanup = _cleanup,
   .initiate_shutdown = _initiate_shutdown,
 };
-DECLARE_OONF_PLUGIN(_import_subsystem);
+DECLARE_OONF_PLUGIN(_olsrv2_lan_import_subsystem);
 
 /* class definition for filters */
 static struct oonf_class _import_class = {
