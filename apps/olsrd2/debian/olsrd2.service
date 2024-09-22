@@ -1,7 +1,8 @@
 [Unit]
 Description=OLSRd2 Routing agent
 Documentation=http://www.olsr.org/
-Requires=networking.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 ExecStart=/usr/sbin/olsrd2_static --load=/etc/olsrd2/olsrd2.conf
