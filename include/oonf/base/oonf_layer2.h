@@ -250,7 +250,7 @@ enum oonf_layer2_network_flags {
  */
 struct oonf_layer2_metadata {
   /*! type of data */
-  const char key[16];
+  const char key[17];
 
   /*! data type */
   enum oonf_layer2_data_type type;

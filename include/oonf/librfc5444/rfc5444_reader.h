@@ -422,7 +422,7 @@ EXPORT void rfc5444_reader_add_message_consumer(struct rfc5444_reader *, struct 
 EXPORT void rfc5444_reader_remove_packet_consumer(struct rfc5444_reader *, struct rfc5444_reader_tlvblock_consumer *);
 EXPORT void rfc5444_reader_remove_message_consumer(struct rfc5444_reader *, struct rfc5444_reader_tlvblock_consumer *);
 
-EXPORT int rfc5444_reader_handle_packet(struct rfc5444_reader *parser, const uint8_t *buffer, size_t length);
+EXPORT enum rfc5444_result rfc5444_reader_handle_packet(struct rfc5444_reader *parser, const uint8_t *buffer, size_t length);
 
 /**
  * Call to set the do-not-forward flag in message context

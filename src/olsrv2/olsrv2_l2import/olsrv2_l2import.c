@@ -310,7 +310,7 @@ _cb_l2neigh_ip_added(void *ptr) {
       if (l2import->domain >= 0) {
         domain = nhdp_domain_get_by_ext(l2import->domain);
         metric = 1;
-        if (l2import->routing_metric < RFC7181_METRIC_MIN) {
+        if (l2import->routing_metric < (int)RFC7181_METRIC_MIN) {
           nhdp_domain_get_metric(domain, &metric, nip->l2neigh);
         }
         else {
@@ -326,7 +326,7 @@ _cb_l2neigh_ip_added(void *ptr) {
                    os_routing_key_to_string(&rbuf, &rt_key));
         list_for_each_element(nhdp_domain_get_list(), domain, _node) {
           metric = 1;
-          if (l2import->routing_metric < RFC7181_METRIC_MIN) {
+          if (l2import->routing_metric < (int)RFC7181_METRIC_MIN) {
             nhdp_domain_get_metric(domain, &metric, nip->l2neigh);
           }
           else {
