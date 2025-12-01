@@ -156,7 +156,7 @@ struct olsrv2_routing_domain {
   int protocol;
 
   /*! routing table number for routes */
-  int table;
+  int32_t table;
 
   /*! metric value that should be used for routes */
   int distance;
