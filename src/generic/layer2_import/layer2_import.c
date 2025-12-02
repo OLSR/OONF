@@ -445,7 +445,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
     }
 
     /* check routing table */
-    if (import->table != -1 && (uint32_t)(import->table) != route->p.table) {
+    if (import->table != -1 && import->table != route->p.table) {
       OONF_DEBUG(LOG_L2_IMPORT, "Bad routing table %u (filter was %d)", route->p.table, import->table);
       continue;
     }
