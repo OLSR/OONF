@@ -28,12 +28,14 @@ set (OONF_APP_DEFAULT_CFG_HANDLER Compact)
 
 IF (NOT OONF_STATIC_PLUGINS)
     set (OONF_STATIC_PLUGINS class
+                             callback
                              clock
                              layer2
                              packet_socket
                              socket
                              stream_socket
                              telnet
+                             http
                              timer
                              viewer
                              os_clock
@@ -44,8 +46,12 @@ IF (NOT OONF_STATIC_PLUGINS)
                              cfg_compact
                              layer2info
                              systeminfo
-                             dlep_router
+                             remotecontrol
+                             layer2_config
                              layer2_export
+#                             dns_query
+#                             dns_sd
+                             dlep
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

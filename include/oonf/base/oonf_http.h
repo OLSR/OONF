@@ -46,8 +46,8 @@
 #ifndef OONF_HTTP_H_
 #define OONF_HTTP_H_
 
-#include <oonf/libcommon/avl.h>
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/libcommon/netaddr_acl.h>
 #include <oonf/libcommon/string.h>

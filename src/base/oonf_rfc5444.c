@@ -96,6 +96,8 @@ static void _destroy_target(struct oonf_rfc5444_target *);
 static void _print_packet_to_buffer(enum oonf_log_source source, union netaddr_socket *sock,
   struct oonf_rfc5444_interface *interf, const uint8_t *ptr, size_t len, const char *success, const char *error);
 
+void _reconfigure_interface(struct oonf_rfc5444_interface *interf,
+    struct oonf_packet_managed_config *config, bool ifchange_context);
 static void _cb_receive_data(struct oonf_packet_socket *, union netaddr_socket *from, void *ptr, size_t length);
 static void _cb_send_unicast_packet(struct rfc5444_writer *, struct rfc5444_writer_target *, void *, size_t);
 static void _cb_send_multicast_packet(struct rfc5444_writer *, struct rfc5444_writer_target *, void *, size_t);
@@ -681,6 +683,18 @@ oonf_rfc5444_remove_interface(struct oonf_rfc5444_interface *interf, struct oonf
  */
 void
 oonf_rfc5444_reconfigure_interface(struct oonf_rfc5444_interface *interf, struct oonf_packet_managed_config *config) {
+  _reconfigure_interface(interf, config, false);
+}
+
+/**
+ * Reconfigure the parameters of an rfc5444 interface. You cannot reconfigure
+ * the interface name with this command.
+ * @param interf pointer to existing rfc5444 interface
+ * @param config new socket configuration, NULL to just reapply the current
+ *  configuration
+ */
+void
+_reconfigure_interface(struct oonf_rfc5444_interface *interf, struct oonf_packet_managed_config *config, bool ifchange_context) {
   struct oonf_rfc5444_target *target, *old;
   uint16_t port;
   struct netaddr_str buf;
@@ -735,8 +749,10 @@ oonf_rfc5444_reconfigure_interface(struct oonf_rfc5444_interface *interf, struct
     return;
   }
 
-  /* apply socket configuration */
-  oonf_packet_apply_managed(&interf->_socket, &interf->_socket_config);
+  if (!ifchange_context) {
+    /* apply socket configuration */
+    oonf_packet_apply_managed(&interf->_socket, &interf->_socket_config);
+  }
 
   /* handle IPv4 multicast target */
   if (interf->multicast4) {
@@ -1446,7 +1462,7 @@ _cb_interface_changed(struct oonf_packet_managed *managed, bool changed) {
   interf = container_of(managed, struct oonf_rfc5444_interface, _socket);
 
   if (changed) {
-    oonf_rfc5444_reconfigure_interface(interf, NULL);
+    _reconfigure_interface(interf, NULL, true);
   }
 
   list_for_each_element(&interf->_listener, l, _node) {

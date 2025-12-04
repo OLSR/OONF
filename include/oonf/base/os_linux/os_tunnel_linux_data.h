@@ -43,10 +43,10 @@
  * @file
  */
 
-#ifndef DLEP_ROUTER_H_
-#define DLEP_ROUTER_H_
+#ifndef OS_TUNNEL_LINUX_DATA_H_
+#define OS_TUNNEL_LINUX_DATA_H_
 
-/*! subsystem identifier */
-#define OONF_DLEP_ROUTER_SUBSYSTEM "dlep_router"
+struct os_tunnel_internal {};
 
-#endif /* DLEP_ROUTER_H_ */
+#endif /* OS_TUNNEL_LINUX_DATA_H_ */
+

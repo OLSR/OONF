@@ -56,10 +56,10 @@
 #include <oonf/generic/dlep/dlep_iana.h>
 #include <oonf/generic/dlep/dlep_session.h>
 #include <oonf/generic/dlep/dlep_writer.h>
-#include <oonf/generic/dlep/radio/dlep_radio.h>
 #include <oonf/generic/dlep/radio/dlep_radio_interface.h>
-#include <oonf/generic/dlep/radio/dlep_radio_internal.h>
 #include <oonf/generic/dlep/radio/dlep_radio_session.h>
+#include <oonf/generic/dlep/dlep_internal.h>
+#include <oonf/generic/dlep/dlep.h>
 
 static int _cb_incoming_tcp(struct oonf_stream_session *);
 static void _cb_tcp_lost(struct oonf_stream_session *);
@@ -68,7 +68,7 @@ static void _cb_send_buffer(struct dlep_session *session, int af_family);
 static void _cb_end_session(struct dlep_session *session);
 
 static struct oonf_class _radio_session_class = {
-  .name = "DLEP TCP session",
+  .name = OONF_CLASS_DLEP_RADIO_SESSION,
   .size = sizeof(struct dlep_radio_session),
 };
 
@@ -135,12 +135,15 @@ _cb_incoming_tcp(struct oonf_stream_session *tcp_session) {
   radio_session->session.cb_send_buffer = _cb_send_buffer;
   radio_session->session.cb_end_session = _cb_end_session;
   memcpy(&radio_session->session.cfg, &interface->interf.session.cfg, sizeof(radio_session->session.cfg));
-  memcpy(
-    &radio_session->session.remote_socket, &tcp_session->remote_socket, sizeof(radio_session->session.remote_socket));
+
+  memcpy(&radio_session->session.local_socket, &tcp_session->stream_socket->local_socket,
+      sizeof(radio_session->session.local_socket));
+  memcpy(&radio_session->session.remote_socket, &tcp_session->remote_socket,
+      sizeof(radio_session->session.remote_socket));
 
   /* attach to session tree of interface */
-  radio_session->_node.key = &radio_session->stream.remote_socket;
-  avl_insert(&interface->interf.session_tree, &radio_session->_node);
+  radio_session->session._node.key = &radio_session->stream.remote_socket;
+  avl_insert(&interface->interf.session_tree, &radio_session->session._node);
 
   /* copy socket information */
   memcpy(
@@ -182,7 +185,7 @@ _cb_tcp_lost(struct oonf_stream_session *tcp_session) {
   dlep_session_remove(&radio_session->session);
 
   /* remove from session tree of interface */
-  avl_remove(&radio_session->interface->interf.session_tree, &radio_session->_node);
+  avl_remove(&radio_session->interface->interf.session_tree, &radio_session->session._node);
 }
 
 /**
@@ -218,9 +221,14 @@ _cb_send_buffer(struct dlep_session *session, int af_family __attribute((unused)
 static void
 _cb_end_session(struct dlep_session *session) {
   struct dlep_radio_session *radio_session;
+#ifdef OONF_LOG_DEBUG_INFO
+  struct netaddr_str nbuf;
+#endif
 
   /* get pointer to radio interface */
   radio_session = container_of(session, struct dlep_radio_session, session);
 
+  OONF_DEBUG(session->log_source, "Ending session to %s",
+             netaddr_socket_to_string(&nbuf, &radio_session->stream.remote_socket));
   dlep_radio_remove_session(radio_session);
 }

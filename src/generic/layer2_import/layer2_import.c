@@ -81,23 +81,32 @@ struct _import_entry {
   /*! address filter */
   struct netaddr_acl filter;
 
-  /*! filter by prefix length, -1 to ignore */
-  int32_t prefix_length;
+  /*! filter by prefix length */
+  int32_t min_prefix_length;
+
+  /*! filter by prefix length */
+  int32_t max_prefix_length;
 
   /*! filter by interface name, length null to ignore*/
   char ifname[IF_NAMESIZE];
 
-  /*! filter by routing table id, 0 to ignore */
+  /*! filter by routing table id, -1 to ignore */
   int32_t table;
 
-  /*! filter by routing protocol id, 0 to ignore */
+  /*! filter by routing protocol id, -1 to ignore */
   int32_t protocol;
 
-  /*! filter by routing metric, 0 to ignore */
+  /*! block certain routing protocol id, -1 to ignore */
+  int32_t block_protocol;
+
+  /*! filter by routing metric, -1 to ignore */
   int32_t distance;
 
   /*! routing type to be imported, nearly always unicast */
   enum os_route_type rttype;
+
+  /*! true if online routes are put into interface_ip db (and non-onlink are ignored) */
+  bool l2net;
 
   /*! set MAC address of imported entries to this interface */
   char fixed_mac_if[IF_NAMESIZE];
@@ -137,18 +146,24 @@ static struct cfg_schema_entry _l2_entries[] = {
   CFG_MAP_ACL(_import_entry, filter, "matches", ACL_DEFAULT_ACCEPT,
     "Ip addresses the filter should be applied to"
     " (the plugin will never import loopback, linklocal or multicast IPs)"),
-  CFG_MAP_INT32_MINMAX(_import_entry, prefix_length, "prefix_length", "-1",
-    "Prefix length the filter should be applied to, -1 for any prefix length", 0, -1, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, min_prefix_length, "min_prefix_length", "0",
+    "Minimal acceptable prefix length to import", 0, 0, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, max_prefix_length, "max_prefix_length", "128",
+    "Maximum acceptable prefix length to import", 0, 0, 128),
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 255),
+    _import_entry, table, "table", "-1", "Routing table of matching routes, -1 for matching all tables", 0, -1, 65535),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, 0 for all protocols", 0, -1, 255),
+    _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, -1 for all protocols", 0, -1, 255),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, distance, "metric", "-1", "Metric of matching routes, 0 for all metrics", 0, -1, INT32_MAX),
+    _import_entry, block_protocol, "block_protocol", "-1",
+    "Routing protocol not imported, -1 to not block any protocol", 0, -1, 255),
+  CFG_MAP_INT32_MINMAX(
+    _import_entry, distance, "metric", "-1", "Metric of matching routes, -1 for all metrics", 0, -1, INT32_MAX),
   CFG_MAP_OS_ROUTING_TYPE_KEY(
     _import_entry, rttype, "rttype", "unicast", "Type of routing metric to be imported"),
+  CFG_MAP_BOOL(_import_entry, l2net, "l2net", "false", "Put imported onlink routes into interface_ip database"),
   CFG_MAP_STRING_ARRAY(_import_entry, fixed_mac_if, "fixed_mac_if", "",
     "Name of interface that will be used to fill in layer2 entry MAC addresses", IF_NAMESIZE),
   CFG_MAP_STRING_ARRAY(_import_entry, fixed_l2if_name, "fixed_l2if_name", "",
@@ -161,16 +176,21 @@ static struct cfg_schema_entry _lan_entries[] = {
   CFG_MAP_ACL(_import_entry, filter, "matches", ACL_DEFAULT_ACCEPT,
     "Ip addresses the filter should be applied to"
     " (the plugin will never import loopback, linklocal or multicast IPs)"),
-  CFG_MAP_INT32_MINMAX(_import_entry, prefix_length, "prefix_length", "-1",
-    "Prefix length the filter should be applied to, -1 for any prefix length", 0, -1, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, min_prefix_length, "min_prefix_length", "0",
+    "Minimal acceptable prefix length to import", 0, 0, 128),
+  CFG_MAP_INT32_MINMAX(_import_entry, max_prefix_length, "max_prefix_length", "128",
+    "Maximum acceptable prefix length to import", 0, 0, 128),
   CFG_MAP_STRING_ARRAY(
     _import_entry, ifname, "interface", "", "Interface name of matching routes, empty if all interfaces", IF_NAMESIZE),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, table, "table", "-1", "Routing table of matching routes, 0 for matching all tables", 0, -1, 255),
+    _import_entry, table, "table", "-1", "Routing table of matching routes, -1 for matching all tables", 0, -1, 65535),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, 0 for all protocols", 0, -1, 255),
+    _import_entry, protocol, "protocol", "-1", "Routing protocol of matching routes, -1 for all protocols", 0, -1, 255),
   CFG_MAP_INT32_MINMAX(
-    _import_entry, distance, "metric", "-1", "Metric of matching routes, 0 for all metrics", 0, -1, INT32_MAX),
+    _import_entry, block_protocol, "block_protocol", "-1",
+    "Routing protocol not imported, -1 to not block any protocol", 0, -1, 255),
+  CFG_MAP_INT32_MINMAX(
+    _import_entry, distance, "metric", "-1", "Metric of matching routes, -1 for all metrics", 0, -1, INT32_MAX),
   CFG_MAP_OS_ROUTING_TYPE_KEY(
     _import_entry, rttype, "rttype", "unicast", "Type of routing metric to be imported"),
   CFG_MAP_STRING_ARRAY(_import_entry, fixed_mac_if, "fixed_mac_if", "",
@@ -369,6 +389,7 @@ _cb_rt_event(const struct os_route *route, bool set) {
   char ifname[IF_NAMESIZE];
   struct oonf_layer2_net *l2net;
   struct oonf_layer2_neigh *l2neigh;
+  struct oonf_layer2_peer_address *l2local;
   struct oonf_layer2_neighbor_address *l2neigh_ip;
   struct oonf_layer2_neigh_key nb_key;
   const struct netaddr *gw, *dst, *mac;
@@ -398,22 +419,28 @@ _cb_rt_event(const struct os_route *route, bool set) {
   avl_for_each_element(&_import_tree, import, _node) {
     OONF_DEBUG(LOG_L2_IMPORT, "Check for import: %s", import->name);
 
-    if (import->rttype != route->p.type) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Bad routing type %u (filter was %d)",
-                 route->p.type, import->rttype);
-      return;
-    }
-
-    /* check prefix length */
-    if (import->prefix_length != -1 && import->prefix_length != netaddr_get_prefix_length(&route->p.key.dst)) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Bad prefix length %u (filter was %d)",
-                 netaddr_get_prefix_length(&route->p.key.dst), import->prefix_length);
+    /* ignore "offlink" routes for l2net import */
+    if (import->l2net && !netaddr_is_unspec(&route->p.gw)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "Route was not onlink");
       continue;
     }
 
-    /* check if destination matches */
-    if (!netaddr_acl_check_accept(&import->filter, &route->p.key.dst)) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Bad prefix %s", netaddr_to_string(&nbuf, &route->p.key.dst));
+    /* check type of route */
+    if (import->rttype != OS_ROUTE_ALL && import->rttype != route->p.type) {
+      OONF_DEBUG(LOG_L2_IMPORT, "Bad routing type %u (filter was %d)",
+                 route->p.type, import->rttype);
+      continue;
+    }
+
+    /* check prefix length */
+    if (import->min_prefix_length > netaddr_get_prefix_length(&route->p.key.dst)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "prefix length %u is too small (filter was %d)",
+                 netaddr_get_prefix_length(&route->p.key.dst), import->min_prefix_length);
+      continue;
+    }
+    if (import->max_prefix_length < netaddr_get_prefix_length(&route->p.key.dst)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "prefix length %u is too large (filter was %d)",
+                 netaddr_get_prefix_length(&route->p.key.dst), import->max_prefix_length);
       continue;
     }
 
@@ -426,6 +453,10 @@ _cb_rt_event(const struct os_route *route, bool set) {
     /* check protocol only for setting routes, its not reported for removing ones */
     if (set && import->protocol != -1 && import->protocol != route->p.protocol) {
       OONF_DEBUG(LOG_L2_IMPORT, "Bad protocol %u (filter was %d)", route->p.protocol, import->protocol);
+      continue;
+    }
+    if (set && import->block_protocol != -1 && import->block_protocol == route->p.protocol) {
+      OONF_DEBUG(LOG_L2_IMPORT, "Bad protocol %u (block was %d)", route->p.protocol, import->protocol);
       continue;
     }
 
@@ -447,6 +478,12 @@ _cb_rt_event(const struct os_route *route, bool set) {
       }
     }
 
+    /* check if destination matches */
+    if (!netaddr_acl_check_accept(&import->filter, &route->p.key.dst)) {
+      OONF_DEBUG(LOG_L2_IMPORT, "Bad prefix %s", netaddr_to_string(&nbuf, &route->p.key.dst));
+      continue;
+    }
+
     /* see if user wants to overwrite layer2 network name */
     if (import->fixed_l2if_name[0]) {
       l2ifname = import->fixed_l2if_name;
@@ -465,63 +502,77 @@ _cb_rt_event(const struct os_route *route, bool set) {
     }
     if (!l2net) {
       OONF_DEBUG(LOG_L2_IMPORT, "No l2 network '%s' found", l2ifname);
-      return;
-    }
-
-    mac = NULL;
-    macifname = "";
-    if (import->fixed_mac_if[0]) {
-      if (import->fixed_if_listener.data) {
-        mac = &import->fixed_if_listener.data->mac;
-        macifname = import->fixed_if_listener.data->name;
-      }
-    }
-    else {
-      mac = &l2net->if_listener.data->mac;
-      macifname = l2net->if_listener.data->name;
-    }
-    if (netaddr_is_unspec(mac)) {
-      OONF_DEBUG(LOG_L2_IMPORT, "Wait for interface (%s) data to be initialized", macifname);
-      if (!oonf_timer_is_active(&_route_reload_instance)) {
-        oonf_timer_set(&_route_reload_instance, 1000);
-      }
-      return;
+      continue;
     }
 
     dst = &route->p.key.dst;
-    gw = &route->p.gw;
 
-    l2neigh_ip = _remove_old_entries(l2net, import, gw, dst);
-    l2neigh = NULL;
-    /* get layer2 neighbor */
-    if (set && !l2neigh_ip) {
-      /* generate l2 key including LID */
-      if (oonf_layer2_neigh_generate_lid(&nb_key, &import->l2origin, mac)) {
-        OONF_WARN(LOG_L2_IMPORT, "Could not generate LID for MAC %s (if %s)",
-            netaddr_to_string(&nbuf, mac), macifname);
+    if (import->l2net) {
+      l2local = oonf_layer2_net_get_local_ip(l2net, dst);
+      if (set && l2local == NULL) {
+        OONF_DEBUG(LOG_L2_IMPORT, "Set new l2net prefix: %s", netaddr_to_string(&nbuf, dst));
+        oonf_layer2_net_add_ip(l2net, &import->l2origin, dst);
+      }
+      else if (!set && l2local != NULL) {
+        OONF_DEBUG(LOG_L2_IMPORT, "Remove l2net prefix: %s", netaddr_to_string(&nbuf, dst));
+        oonf_layer2_net_remove_ip(l2local, &import->l2origin);
+      }
+    }
+    else{
+      mac = NULL;
+      macifname = "";
+      if (import->fixed_mac_if[0]) {
+        if (import->fixed_if_listener.data) {
+          mac = &import->fixed_if_listener.data->mac;
+          macifname = import->fixed_if_listener.data->name;
+        }
+      }
+      else {
+        mac = &l2net->if_listener.data->mac;
+        macifname = l2net->if_listener.data->name;
+      }
+      if (netaddr_is_unspec(mac)) {
+        OONF_DEBUG(LOG_L2_IMPORT, "Wait for interface (%s) data to be initialized", macifname);
+        if (!oonf_timer_is_active(&_route_reload_instance)) {
+          oonf_timer_set(&_route_reload_instance, 1000);
+        }
         continue;
       }
 
-      l2neigh = oonf_layer2_neigh_add_lid(l2net, &nb_key);
-      if (!l2neigh) {
-        OONF_DEBUG(LOG_L2_IMPORT, "No l2 neighbor found");
-        return;
-      }
+      gw = &route->p.gw;
 
-      OONF_DEBUG(LOG_L2_IMPORT, "Import layer2 neighbor...");
+      l2neigh_ip = _remove_old_entries(l2net, import, gw, dst);
+      l2neigh = NULL;
+      /* get layer2 neighbor */
+      if (set && !l2neigh_ip) {
+        /* generate l2 key including LID */
+        if (oonf_layer2_neigh_generate_lid(&nb_key, &import->l2origin, mac)) {
+          OONF_WARN(LOG_L2_IMPORT, "Could not generate LID for MAC %s (if %s)",
+              netaddr_to_string(&nbuf, mac), macifname);
+          continue;
+        }
 
-      /* make sure next hop is initialized */
-      oonf_layer2_neigh_set_nexthop(l2neigh, gw);
-      if (!oonf_layer2_neigh_get_remote_ip(l2neigh, dst)) {
-        oonf_layer2_neigh_add_ip(l2neigh, &import->l2origin, dst);
+        l2neigh = oonf_layer2_neigh_add_lid(l2net, &nb_key);
+        if (!l2neigh) {
+          OONF_DEBUG(LOG_L2_IMPORT, "No l2 neighbor found");
+          continue;
+        }
+
+        OONF_DEBUG(LOG_L2_IMPORT, "Import layer2 neighbor...");
+
+        /* make sure next hop is initialized */
+        oonf_layer2_neigh_set_nexthop(l2neigh, gw);
+        if (!oonf_layer2_neigh_get_remote_ip(l2neigh, dst)) {
+          oonf_layer2_neigh_add_ip(l2neigh, &import->l2origin, dst);
+        }
+        oonf_layer2_neigh_commit(l2neigh);
       }
-      oonf_layer2_neigh_commit(l2neigh);
-    }
-    else if (!set && l2neigh_ip) {
-      l2neigh = l2neigh_ip->l2neigh;
-      oonf_layer2_neigh_remove_ip(l2neigh_ip, &import->l2origin);
-      oonf_layer2_neigh_commit(l2neigh);
-    }
+      else if (!set && l2neigh_ip) {
+        l2neigh = l2neigh_ip->l2neigh;
+        oonf_layer2_neigh_remove_ip(l2neigh_ip, &import->l2origin);
+        oonf_layer2_neigh_commit(l2neigh);
+      }
+      }
   }
 }
 
@@ -533,7 +584,6 @@ _cb_rt_event(const struct os_route *route, bool set) {
 static struct _import_entry *
 _get_import(const char *name) {
   struct _import_entry *import;
-
   import = avl_find_element(&_import_tree, name, import, _node);
   if (import) {
     return import;

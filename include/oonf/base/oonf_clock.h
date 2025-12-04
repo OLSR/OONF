@@ -177,7 +177,19 @@ EXPORT uint64_t oonf_clock_getNow(void);
 EXPORT const char *oonf_clock_toClockString(struct isonumber_str *, uint64_t);
 
 /**
- * Converts an internal time value into a string representation with
+ * Converts an internal time interval into a string representation with
+ * the numbers of seconds (including milliseconds as fractions)
+ * @param buf target buffer
+ * @param i time value
+ * @return pointer to string representation
+ */
+static INLINE const char *
+oonf_clock_toIntervalString_ext(struct isonumber_str *buf, int64_t i, bool raw) {
+  return isonumber_from_s64(buf, i, "", 1000, raw);
+}
+
+/**
+ * Converts an internal time interval into a string representation with
  * the numbers of seconds (including milliseconds as fractions)
  * @param buf target buffer
  * @param i time value
@@ -185,7 +197,7 @@ EXPORT const char *oonf_clock_toClockString(struct isonumber_str *, uint64_t);
  */
 static INLINE const char *
 oonf_clock_toIntervalString(struct isonumber_str *buf, int64_t i) {
-  return isonumber_from_s64(buf, i, "", 1000, true);
+  return oonf_clock_toIntervalString_ext(buf, i, false);
 }
 
 /**
@@ -200,7 +212,7 @@ oonf_clock_fromIntervalString(uint64_t *result, const char *string) {
   int64_t t;
   int r;
 
-  r = isonumber_to_s64(&t, string, 1000);
+  r = isonumber_to_s64(&t, string, NULL, 1000);
   if (r == 0) {
     *result = t;
   }

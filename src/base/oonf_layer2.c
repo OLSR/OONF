@@ -105,11 +105,15 @@ static const struct oonf_layer2_metadata _metadata_neigh[OONF_LAYER2_NEIGH_COUNT
   [OONF_LAYER2_NEIGH_TX_RLQ] = { .key = "tx_rlq", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RX_RLQ] = { .key = "rx_rlq", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RX_BC_BITRATE] = { .key = "rx_bc_bitrate", .type = OONF_LAYER2_INTEGER_DATA, .unit = "bit/s", .scaling = 1 },
-  [OONF_LAYER2_NEIGH_RX_BC_LOSS] = { .key = "rx_bc_loss", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1000 },
+  [OONF_LAYER2_NEIGH_RX_BC_LOSS] = { .key = "rx_bc_loss", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 100 },
   [OONF_LAYER2_NEIGH_LATENCY] = { .key = "latency", .type = OONF_LAYER2_INTEGER_DATA, .unit = "s", .scaling = 1000000 },
   [OONF_LAYER2_NEIGH_RESOURCES] = { .key = "resources", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_RADIO_HOPCOUNT] = { .key = "radio_hopcount", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
   [OONF_LAYER2_NEIGH_IP_HOPCOUNT] = { .key = "ip_hopcount", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE] = { .key = "tx_error_rate", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE] = { .key = "rx_error_rate", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_TX_FRAME_ERROR_RATE_PKTSIZE] = { .key = "tx_error_pktsize", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
+  [OONF_LAYER2_NEIGH_RX_FRAME_ERROR_RATE_PKTSIZE] = { .key = "rx_error_pktsize", .type = OONF_LAYER2_INTEGER_DATA, .scaling = 1 },
 };
 
 /* layer2 network metadata */
@@ -133,6 +137,10 @@ static const struct oonf_layer2_metadata _metadata_net[OONF_LAYER2_NET_COUNT] = 
   [OONF_LAYER2_NET_TX_ONLY_UNICAST] = { .key = "tx_only_unicast", .type = OONF_LAYER2_BOOLEAN_DATA },
   [OONF_LAYER2_NET_RADIO_MULTIHOP] = { .key = "radio_multihop", .type = OONF_LAYER2_BOOLEAN_DATA },
   [OONF_LAYER2_NET_BAND_UP_DOWN] = { .key = "band_updown", .type = OONF_LAYER2_BOOLEAN_DATA },
+  [OONF_LAYER2_NET_IPV4_LOCAL_DNS] = { .key = "local_ipv4_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV4_DATA | OONF_LAYER2_UNSPEC_DATA },
+  [OONF_LAYER2_NET_IPV6_LOCAL_DNS] = { .key = "local_ipv6_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV6_DATA | OONF_LAYER2_UNSPEC_DATA },
+  [OONF_LAYER2_NET_IPV4_REMOTE_DNS] = { .key = "remote_ipv4_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV4_DATA | OONF_LAYER2_UNSPEC_DATA },
+  [OONF_LAYER2_NET_IPV6_REMOTE_DNS] = { .key = "remote_ipv6_dns", .type = OONF_LAYER2_SOCKET_DATA, .net_flags = OONF_LAYER2_IPV6_DATA | OONF_LAYER2_UNSPEC_DATA },
 };
 
 static const char *_network_type[OONF_LAYER2_TYPE_COUNT] = {
@@ -155,6 +163,7 @@ static const char *_data_types[OONF_LAYER2_DATA_TYPE_COUNT] = {
   [OONF_LAYER2_INTEGER_DATA] = "integer",
   [OONF_LAYER2_BOOLEAN_DATA] = "boolean",
   [OONF_LAYER2_NETWORK_DATA] = "network",
+  [OONF_LAYER2_SOCKET_DATA]  = "socket",
 };
 
 /* infrastructure for l2net/l2neigh tree */
@@ -287,13 +296,53 @@ oonf_layer2_data_parse_string(
 
   switch (meta->type) {
     case OONF_LAYER2_INTEGER_DATA:
-      return isonumber_to_s64(&value->integer, input, meta->scaling);
+      return isonumber_to_s64(&value->integer, input, meta->unit, meta->scaling);
 
     case OONF_LAYER2_BOOLEAN_DATA:
       if (!cfg_is_bool(input)) {
-        return -1;
+        return -2;
       }
       value->boolean = cfg_get_bool(input);
+      return 0;
+
+    case OONF_LAYER2_NETWORK_DATA:
+      if (netaddr_from_string(&value->addr, input)) {
+        return -2;
+      }
+      if (netaddr_is_unspec(&value->addr)
+          && (meta->net_flags & OONF_LAYER2_UNSPEC_DATA) == 0) {
+        return -3;
+      }
+      if (netaddr_get_address_family(&value->addr) == AF_INET
+          && (meta->net_flags & OONF_LAYER2_IPV4_DATA) == 0) {
+        return -4;
+      }
+      if (netaddr_get_address_family(&value->addr) == AF_INET6
+          && (meta->net_flags & OONF_LAYER2_IPV6_DATA) == 0) {
+        return -5;
+      }
+      if (!netaddr_is_host(&value->addr)
+          && (meta->net_flags & OONF_LAYER2_HOST_ONLY_DATA) != 0) {
+        return -6;
+      }
+      return 0;
+
+    case OONF_LAYER2_SOCKET_DATA:
+      if (netaddr_socket_from_string(&value->socket, input)) {
+        return -2;
+      }
+      if (netaddr_socket_is_unspec(&value->socket)
+          && (meta->net_flags & OONF_LAYER2_UNSPEC_DATA) == 0) {
+        return -3;
+      }
+      if (netaddr_socket_get_addressfamily(&value->socket) == AF_INET
+          && (meta->net_flags & OONF_LAYER2_IPV4_DATA) == 0) {
+        return -4;
+      }
+      if (netaddr_socket_get_addressfamily(&value->socket) == AF_INET6
+          && (meta->net_flags & OONF_LAYER2_IPV6_DATA) == 0) {
+        return -5;
+      }
       return 0;
 
     default:
@@ -314,6 +363,7 @@ const char *
 oonf_layer2_data_to_string(
   char *buffer, size_t length, const struct oonf_layer2_data *data, const struct oonf_layer2_metadata *meta, bool raw) {
   struct isonumber_str iso_str;
+  struct netaddr_str nbuf;
 
   switch (meta->type) {
     case OONF_LAYER2_INTEGER_DATA:
@@ -324,6 +374,12 @@ oonf_layer2_data_to_string(
 
     case OONF_LAYER2_BOOLEAN_DATA:
       return strscpy(buffer, json_getbool(data->_value.boolean), length);
+
+    case OONF_LAYER2_NETWORK_DATA:
+      return strscpy(buffer, netaddr_to_string(&nbuf, &data->_value.addr), length);
+
+    case OONF_LAYER2_SOCKET_DATA:
+      return strscpy(buffer, netaddr_socket_to_string(&nbuf, &data->_value.socket), length);
 
     default:
       return NULL;
@@ -418,6 +474,9 @@ oonf_layer2_data_compare(const union oonf_layer2_value *left, const union oonf_l
       break;
     case OONF_LAYER2_NETWORK_DATA:
       result = memcmp(&left->addr, &right->addr, sizeof(left->addr));
+      break;
+    case OONF_LAYER2_SOCKET_DATA:
+      result = memcmp(&left->socket, &right->socket, sizeof(left->socket));
       break;
     default:
       return false;
@@ -545,9 +604,16 @@ oonf_layer2_net_add(const char *ifname) {
  */
 bool
 oonf_layer2_net_cleanup(struct oonf_layer2_net *l2net, const struct oonf_layer2_origin *origin, bool cleanup_neigh) {
+  struct oonf_layer2_peer_address *l2peer, *l2peer_it;
   struct oonf_layer2_neigh *l2neigh;
   bool changed = false;
   int i;
+
+  avl_for_each_element_safe(&l2net->local_peer_ips, l2peer, _net_node, l2peer_it) {
+    if (!oonf_layer2_net_remove_ip(l2peer, origin)) {
+      changed = true;
+    }
+  }
 
   for (i = 0; i < OONF_LAYER2_NET_COUNT; i++) {
     if (l2net->data[i]._origin == origin) {
@@ -612,6 +678,11 @@ bool
 oonf_layer2_net_commit(struct oonf_layer2_net *l2net) {
   size_t i;
 
+  if (l2net->local_peer_ips.count > 0) {
+    oonf_class_event(&_l2network_class, l2net, OONF_OBJECT_CHANGED);
+    return false;
+  }
+  
   if (l2net->neighbors.count > 0) {
     oonf_class_event(&_l2network_class, l2net, OONF_OBJECT_CHANGED);
     return false;
@@ -704,10 +775,13 @@ oonf_layer2_net_add_ip(
     l2addr->_global_node.key = &l2addr->ip;
     avl_insert(&_local_peer_ips_tree, &l2addr->_global_node);
 
+    l2addr->origin = origin;
+
     oonf_class_event(&_l2net_addr_class, l2addr, OONF_OBJECT_ADDED);
   }
-
-  l2addr->origin = origin;
+  else {
+    l2addr->origin = origin;
+  }
   return l2addr;
 }
 
@@ -1358,6 +1432,23 @@ oonf_layer2_tobin_mac_lid(const struct cfg_schema_entry *s_entry, const struct c
 const char *
 oonf_layer2_net_get_type_name(enum oonf_layer2_network_type type) {
   return _network_type[type];
+}
+
+/**
+ * get network type from string
+ * @param name type name
+ * @return oonf_layer2_network_type, undefined if unknown string
+ */
+enum oonf_layer2_network_type
+oonf_layer2_get_type(const char *name) {
+  enum oonf_layer2_network_type type;
+
+  for (type = 0; type < OONF_LAYER2_TYPE_COUNT; type++) {
+    if (strcmp(_network_type[type], name) == 0) {
+      return type;
+    }
+  }
+  return OONF_LAYER2_TYPE_UNDEFINED;
 }
 
 /**

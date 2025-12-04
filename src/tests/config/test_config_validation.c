@@ -212,15 +212,15 @@ test_validate_int_miss(void) {
   CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
       "%s", abuf_getptr(&out));
 
-  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "a");
+  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "b");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
       "validation missed bad integer");
 
-  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "1a");
+  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "1b");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
       "validation missed bad integer");
 
-  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "1 a");
+  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "1 b");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
       "validation missed bad integer");
 
@@ -272,7 +272,7 @@ test_validate_fractional_miss(void) {
   CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
       "%s", abuf_getptr(&out));
 
-  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "fractional", "a");
+  cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "fractional", "b");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
       "validation missed bad integer");
 

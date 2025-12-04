@@ -28,6 +28,7 @@ set (OONF_APP_DEFAULT_CFG_HANDLER Compact)
 
 IF (NOT OONF_STATIC_PLUGINS)
     set (OONF_STATIC_PLUGINS class
+                             callback
                              clock
                              duplicate_set
                              layer2
@@ -62,6 +63,7 @@ IF (NOT OONF_STATIC_PLUGINS)
                              http
                              mpr
                              remotecontrol
+                             route_modifier
                              )
 ENDIF (NOT OONF_STATIC_PLUGINS)
 

@@ -53,6 +53,7 @@
 #include <oonf/libcore/oonf_logging.h>
 #include <oonf/libcore/oonf_main.h>
 #include <oonf/libcore/oonf_subsystem.h>
+#include <oonf/base/oonf_callback.h>
 #include <oonf/base/oonf_clock.h>
 #include <oonf/base/oonf_socket.h>
 #include <oonf/base/oonf_timer.h>
@@ -81,6 +82,7 @@ struct os_fd_select _socket_events;
 
 /* subsystem definition */
 static const char *_dependencies[] = {
+  OONF_CALLBACK_SUBSYSTEM,
   OONF_TIMER_SUBSYSTEM,
   OONF_OS_FD_SUBSYSTEM,
 };
@@ -218,12 +220,14 @@ _handle_scheduling(void) {
       return -1;
     }
 
+    oonf_callback_walk();
     oonf_timer_walk();
 
     if (_shall_end_scheduler()) {
       return 0;
     }
 
+    oonf_callback_walk();
     next_event = oonf_timer_getNextEvent();
     if (next_event > _scheduler_time_limit) {
       next_event = _scheduler_time_limit;

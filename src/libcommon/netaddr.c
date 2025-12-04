@@ -115,10 +115,10 @@ const struct netaddr NETADDR_MAC48_BROADCAST = { { 0xff, 0xff, 0xff, 0xff, 0xff,
   AF_MAC48, 48 };
 
 /*! Ethernet multicast prefix for IPv4 multicast */
-const struct netaddr NETADDR_MAC48_IPV4_MULTICAST = { { 0x01, 0x00, 0x5e, 0x00, 0x00, 0x00 }, AF_MAC48, 25 };
+const struct netaddr NETADDR_MAC48_IPV4_MULTICAST = { { 0x01, 0x00, 0x5e, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, AF_MAC48, 25 };
 
 /*! Ethernet multicast prefix for IPv4 multicast */
-const struct netaddr NETADDR_MAC48_IPV6_MULTICAST = { { 0x33, 0x33, 0x00, 0x00, 0x00, 0x00 }, AF_MAC48, 16 };
+const struct netaddr NETADDR_MAC48_IPV6_MULTICAST = { { 0x33, 0x33, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  }, AF_MAC48, 16 };
 
 /*! socket for binding to any IPv4 address */
 const union netaddr_socket NETADDR_SOCKET_IPV4_ANY = { .v4 = {
@@ -134,6 +134,9 @@ const union netaddr_socket NETADDR_SOCKET_IPV6_ANY = { .v6 = {
                                                          .sin6_addr.s6_addr32 = { 0, 0, 0, 0 },
                                                          .sin6_scope_id = 0,
                                                        } };
+
+                                                       /*! socket for binding to any IPv6 address */
+const union netaddr_socket NETADDR_SOCKET_UNSPEC = NETADDR_SOCKET_UNSPEC_INIT;
 
 /* List of predefined address prefixes */
 static const struct {
@@ -496,6 +499,22 @@ netaddr_socket_init(union netaddr_socket *combined, const struct netaddr *addr, 
 
 /**
  * @param sock pointer to netaddr_socket
+ * @return pointer to binary address
+ */
+const uint8_t *
+netaddr_socket_get_addr_binptr(const union netaddr_socket *sock) {
+  switch (sock->std.sa_family) {
+    case AF_INET:
+      return (uint8_t *)&sock->v4.sin_addr.s_addr;
+    case AF_INET6:
+      return (uint8_t *)&sock->v6.sin6_addr;
+    default:
+      return NULL;
+  }
+}
+
+/**
+ * @param sock pointer to netaddr_socket
  * @return port of socket
  */
 uint16_t
@@ -748,6 +767,87 @@ netaddr_socket_to_string(struct netaddr_str *dst, const union netaddr_socket *sr
   }
 
   return dst->buf;
+}
+
+/**
+ * Converts a socket (<ip>:<port> or [<ip>]:<port> or [<ip>]:<port>%interface)
+ * to a network socket
+ * @param dst network socket object to store result
+ * @param src input string
+ * @return 0 if conversion was successful, negative otherwise
+ */
+int
+netaddr_socket_from_string(union netaddr_socket *dst, const char *src) {
+  struct netaddr_str nbuf;
+  char *ptr1, *ptr2;
+  char *ip_start;
+  char *port_start;
+  char *if_start;
+  struct netaddr addr;
+  uint32_t port;
+  unsigned idx;
+
+  /* copy address so we can modify the string */
+  strscpy(nbuf.buf, src, sizeof(nbuf));
+
+  /* get rid of whitespaces */
+  ptr1 = str_trim(nbuf.buf);
+  if (ptr1[0] == '-' && ptr1[1] == 0) {
+    netaddr_socket_invalidate(dst);
+    return 0;
+  }
+
+  if (ptr1[0] == '[') {
+    ptr2 = strchr(ptr1, ']');
+    if (!ptr2) {
+      return -1;
+    }
+
+    /* get ip start */
+    ip_start = &ptr1[1];
+    *ptr2 = 0;
+
+    ptr1 = &ptr2[1];
+  }
+  else {
+    ip_start = ptr1;
+    ptr1 = strchr(ptr1, ':');
+    if (!ptr1) {
+      return -2;
+    }
+  }
+  /* get port start */
+  if (*ptr1 != ':') {
+    return -3;
+  }
+  *ptr1 = 0;
+  port_start = &ptr1[1];
+
+  /* get interface start */
+  ptr2 = strchr(port_start, '%');
+  if (ptr2) {
+    *ptr2 = 0;
+    if_start =  &ptr2[1];
+  }
+  else {
+    if_start = NULL;
+  }
+
+  if (netaddr_from_string(&addr, ip_start)) {
+    return -4;
+  }
+  port = strtoul(port_start, NULL, 10);
+  if (port > 65535) {
+    return -5;
+  }
+  if (if_start) {
+    idx = if_nametoindex(if_start);
+  }
+  else {
+    idx = 0;
+  }
+
+  return netaddr_socket_init(dst, &addr, port, idx) == 0 ? 0 : -6;
 }
 
 /**

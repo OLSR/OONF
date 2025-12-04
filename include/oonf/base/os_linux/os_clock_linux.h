@@ -47,6 +47,7 @@
 #define OS_CLOCK_LINUX_H_
 
 #include <oonf/oonf.h>
+#include <oonf/base/os_linux/os_clock_linux_data.h>
 
 EXPORT int os_clock_linux_gettime64_ns(uint64_t *t64);
 EXPORT int os_clock_linux_gettime64(uint64_t *t64);

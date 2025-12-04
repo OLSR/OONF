@@ -278,19 +278,19 @@ static struct rate_info _mcs_table_80211n_40[77] = {
  */
 void
 nl80211_send_get_wiphy(
-  struct os_system_netlink *nl, struct nlmsghdr *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf) {
+  struct os_system_netlink_message *nl_msg, struct genlmsghdr *hdr, struct nl80211_if *interf) {
   /* clear maximum data rates */
   interf->max_rx = 0;
   interf->max_tx = 0;
 
   hdr->cmd = NL80211_CMD_GET_WIPHY;
-  nl_msg->nlmsg_flags |= NLM_F_DUMP;
+  nl_msg->message->nlmsg_flags |= NLM_F_DUMP;
 
   /* add "split wiphy dump" flag */
-  os_system_linux_netlink_addreq(nl, nl_msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, NULL, 0);
+  os_system_linux_netlink_addreq(nl_msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, NULL, 0);
 
   /* add interface index to the request */
-  os_system_linux_netlink_addreq(nl, nl_msg, NL80211_ATTR_WIPHY, &interf->wifi_phy_if, sizeof(interf->wifi_phy_if));
+  os_system_linux_netlink_addreq(nl_msg, NL80211_ATTR_WIPHY, &interf->wifi_phy_if, sizeof(interf->wifi_phy_if));
 
   OONF_DEBUG(LOG_NL80211, "Send GET_WIPHY to phydev %d", interf->wifi_phy_if);
 }

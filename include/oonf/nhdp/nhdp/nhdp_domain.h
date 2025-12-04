@@ -341,7 +341,7 @@ EXPORT size_t nhdp_domain_encode_willingness_tlvvalue(uint8_t *tlvvalue, size_t 
 
 EXPORT bool nhdp_domain_set_incoming_metric(
   struct nhdp_domain_metric *metric, struct nhdp_link *lnk, uint32_t metric_in);
-EXPORT bool nhdp_domain_recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh);
+EXPORT bool nhdp_domain_recalculate_metrics(struct nhdp_domain *domain, struct nhdp_neighbor *neigh, bool force);
 EXPORT enum nhdp_metric_result nhdp_domain_get_metric(struct nhdp_domain *domain, uint32_t *metric, struct oonf_layer2_neigh *neigh);
 
 EXPORT bool nhdp_domain_node_is_mpr(void);

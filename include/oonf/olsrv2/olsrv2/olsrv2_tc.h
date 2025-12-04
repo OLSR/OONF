@@ -251,11 +251,11 @@ olsrv2_tc_is_node_virtual(struct olsrv2_tc_node *node) {
 }
 
 /**
- * @param prefix network prefix of tc endpoint
+ * @param prefix network prefix of tc endpoint, might be source specific
  * @return pointer to tc endpoint, NULL if not found
  */
 static INLINE struct olsrv2_tc_endpoint *
-olsrv2_tc_endpoint_get(struct netaddr *prefix) {
+olsrv2_tc_endpoint_get(struct os_route_key *prefix) {
   struct olsrv2_tc_endpoint *end;
 
   return avl_find_element(olsrv2_tc_get_endpoint_tree(), prefix, end, _node);

@@ -56,7 +56,7 @@
 #include <oonf/generic/dlep/dlep_session.h>
 #include <oonf/generic/dlep/dlep_writer.h>
 
-static int _process_interface_specific_update(struct dlep_extension *ext, struct dlep_session *session);
+static enum dlep_parser_error _process_interface_specific_update(struct dlep_extension *ext, struct dlep_session *session);
 
 static struct avl_tree _extension_tree;
 

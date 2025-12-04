@@ -342,7 +342,7 @@ struct oonf_log_parameters {
  * @param format printf style format string
  * @param args variable number of parameters for format string
  */
-#define OONF_ASSERT_HEX(condition, source, format, args...) _OONF_LOG(LOG_SEVERITY_ASSERT, source, hexptr, hexlen, !(condition), true, format, ##args)
+#define OONF_ASSERT_HEX(condition, source, hexptr, hexlen, format, args...) _OONF_LOG(LOG_SEVERITY_ASSERT, source, hexptr, hexlen, !(condition), true, format, ##args)
 
 /**
  * Definition of a logging handler

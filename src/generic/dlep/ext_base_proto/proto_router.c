@@ -65,8 +65,6 @@ static void _cb_create_peer_discovery(struct oonf_timer_instance *);
 
 static enum dlep_parser_error _router_process_peer_offer(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _router_process_session_init_ack(struct dlep_extension *, struct dlep_session *);
-static enum dlep_parser_error _router_process_session_update(struct dlep_extension *, struct dlep_session *);
-static enum dlep_parser_error _router_process_session_update_ack(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _router_process_destination_up(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _router_process_destination_up_ack(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _router_process_destination_down(struct dlep_extension *, struct dlep_session *);
@@ -96,11 +94,11 @@ static struct dlep_extension_implementation _router_signals[] = {
   },
   {
     .id = DLEP_SESSION_UPDATE,
-    .process = _router_process_session_update,
+    .process = dlep_base_proto_process_session_update,
   },
   {
     .id = DLEP_SESSION_UPDATE_ACK,
-    .process = _router_process_session_update_ack,
+    .process = dlep_base_proto_process_session_update_ack,
   },
   {
     .id = DLEP_SESSION_TERMINATION,
@@ -290,7 +288,7 @@ _router_process_peer_offer(struct dlep_extension *ext __attribute__((unused)), s
       ip = os_interface_get_prefix_from_dst(&addr, ifdata);
       if (ip) {
         result = &ip->address;
-        netaddr_socket_init(&remote, &addr, port, ifdata->index);
+        netaddr_socket_init(&remote, &addr, port, session->dlep_if_index);
       }
     }
     value = dlep_session_get_next_tlv_value(session, value);
@@ -310,7 +308,7 @@ _router_process_peer_offer(struct dlep_extension *ext __attribute__((unused)), s
       ip = os_interface_get_prefix_from_dst(&addr, ifdata);
       if (ip) {
         result = &ip->address;
-        netaddr_socket_init(&remote, &addr, port, ifdata->index);
+        netaddr_socket_init(&remote, &addr, port, session->dlep_if_index);
       }
     }
     value = dlep_session_get_next_tlv_value(session, value);
@@ -326,11 +324,11 @@ _router_process_peer_offer(struct dlep_extension *ext __attribute__((unused)), s
       return DLEP_NEW_PARSER_INTERNAL_ERROR;
     }
     result = &ip->address;
-    netaddr_socket_init(&remote, &addr, port, ifdata->index);
+    netaddr_socket_init(&remote, &addr, port, session->dlep_if_index);
   }
 
   /* initialize session */
-  netaddr_socket_init(&local, result, 0, ifdata->index);
+  netaddr_socket_init(&local, result, 0, session->dlep_if_index);
 
   router_if = dlep_router_get_by_layer2_if(ifdata->name);
   if (router_if && &router_if->interf.session == session) {
@@ -402,47 +400,6 @@ _router_process_session_init_ack(struct dlep_extension *ext __attribute__((unuse
 
   session->next_restrict_signal = DLEP_ALL_SIGNALS;
 
-  return DLEP_NEW_PARSER_OKAY;
-}
-
-/**
- * Process the peer update message
- * @param ext (this) dlep extension
- * @param session dlep session
- * @return -1 if an error happened, 0 otherwise
- */
-static int
-_router_process_session_update(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
-  struct oonf_layer2_net *l2net;
-  int result;
-
-  l2net = oonf_layer2_net_add(session->l2_listener.name);
-  if (!l2net) {
-    return DLEP_NEW_PARSER_OUT_OF_MEMORY;
-  }
-
-  result = dlep_reader_map_l2neigh_data(l2net->neighdata, session, _base);
-  if (result) {
-    OONF_INFO(session->log_source, "tlv mapping failed for extension %u: %u", ext->id, result);
-    return DLEP_NEW_PARSER_INTERNAL_ERROR;
-  }
-
-  /* generate ACK */
-  if (dlep_session_generate_signal_status(session, DLEP_SESSION_UPDATE_ACK, NULL, DLEP_STATUS_OKAY, "Success")) {
-    return DLEP_NEW_PARSER_INTERNAL_ERROR;
-  }
-  return DLEP_NEW_PARSER_OKAY;
-}
-
-/**
- * Process the peer update ack message
- * @param ext (this) dlep extension
- * @param session dlep session
- * @return -1 if an error happened, 0 otherwise
- */
-static enum dlep_parser_error
-_router_process_session_update_ack(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
-  dlep_base_proto_print_status(session);
   return DLEP_NEW_PARSER_OKAY;
 }
 

@@ -50,6 +50,7 @@
 #include <oonf/oonf.h>
 #include <oonf/libcore/oonf_logging.h>
 #include <oonf/base/oonf_packet_socket.h>
+#include <oonf/generic/dlep/dlep_session.h>
 
 #define DLEP_IF_UDP_NONE_STR           "none"
 #define DLEP_IF_UDP_SINGLE_SESSION_STR "single_session"
@@ -91,7 +92,7 @@ struct dlep_if {
   /*! true if this interface is used for DLEP radio */
   bool radio;
 
-  /*! hook into session tree, interface name is the key */
+  /*! hook into interface tree, interface name is the key */
   struct avl_node _node;
 
   /*! tree of all sessions of same type (radio/router) on this interface */

@@ -46,101 +46,29 @@
 #ifndef OS_SYSTEM_LINUX_H_
 #define OS_SYSTEM_LINUX_H_
 
+struct os_system_netlink_message;
+struct os_system_netlink_socket;
+struct os_system_netlink;
+
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 
+#include <oonf/libcommon/list.h>
 #include <oonf/libcommon/netaddr.h>
 #include <oonf/libcore/oonf_subsystem.h>
 #include <oonf/base/oonf_socket.h>
 #include <oonf/base/oonf_timer.h>
-
-/*! default timeout for netlink messages */
-#define OS_SYSTEM_NETLINK_TIMEOUT 1000
-
-/**
- * A buffer for transmitting netlink commands to the operation system
- */
-struct os_system_netlink_buffer {
-  /*! hook into list of currently used buffers */
-  struct list_entity _node;
-
-  /*! total number of bytes in buffer */
-  uint32_t total;
-
-  /*! total number of messages in buffer */
-  uint32_t messages;
-};
-
-/**
- * Linux netlink handler
- */
-struct os_system_netlink {
-  /*! name of netlink handler */
-  const char *name;
-
-  /*! socket handler for netlink communication */
-  struct oonf_socket_entry socket;
-
-  /*! output buffer for netlink data */
-  struct autobuf out;
-
-  /*! number of messages in output buffer */
-  uint32_t out_messages;
-
-  /*! link of data buffers to transmit */
-  struct list_entity buffered;
-
-  /*! subsystem that uses this netlink handler */
-  struct oonf_subsystem *used_by;
-
-  /*! pointer to currently processed netlink message header */
-  struct nlmsghdr *in;
-
-  /*! number of bytes of currently processed netlink message */
-  size_t in_len;
-
-  /*! number of messages in transit to the kernel */
-  int msg_in_transit;
-
-  /**
-   * Callback to handle incoming message from the kernel
-   * @param hdr netlink message header
-   */
-  void (*cb_message)(struct nlmsghdr *hdr);
-
-  /**
-   * Callback to handle error message of kernel
-   * @param seq netlink sequence number that triggered the error
-   * @param error error code
-   */
-  void (*cb_error)(uint32_t seq, int error);
-
-  /**
-   * Callback to notify the netlink communication timed out
-   */
-  void (*cb_timeout)(void);
-
-  /**
-   * Callback to notify that a netlink message has been processed
-   * @param seq sequence number of the processed netlink message
-   */
-  void (*cb_done)(uint32_t seq);
-
-  /*! netlink timeout handler */
-  struct oonf_timer_instance timeout;
-};
+#include <oonf/base/os_linux/os_system_linux_data.h>
 
 EXPORT bool os_system_linux_is_ipv6_supported(void);
 
 EXPORT bool os_system_linux_is_minimal_kernel(int v1, int v2, int v3);
 EXPORT int os_system_linux_netlink_add(struct os_system_netlink *, int protocol);
 EXPORT void os_system_linux_netlink_remove(struct os_system_netlink *);
-EXPORT int os_system_linux_netlink_send(struct os_system_netlink *fd, struct nlmsghdr *nl_hdr);
-EXPORT int os_system_linux_netlink_add_mc(struct os_system_netlink *, const uint32_t *groups, size_t groupcount);
-EXPORT int os_system_linux_netlink_drop_mc(struct os_system_netlink *, const int *groups, size_t groupcount);
+EXPORT void os_system_linux_netlink_send(struct os_system_netlink *fd, struct os_system_netlink_message *msg);
 
 EXPORT int os_system_linux_netlink_addreq(
-  struct os_system_netlink *nl, struct nlmsghdr *n, int type, const void *data, int len);
+  struct os_system_netlink_message *nl_msg, int type, const void *data, int len);
 
 EXPORT int os_system_linux_linux_get_ioctl_fd(int af_type);
 
@@ -154,16 +82,26 @@ os_system_is_ipv6_supported(void) {
 
 /**
  * Adds an address TLV to a netlink stream
- * @param nl netlink handler
- * @param n netlink message header
+ * @param nl_msg netlink message
  * @param type netlink TLV type
  * @param addr address
  * @return -1 if an error happened, 0 otherwise
  */
 static INLINE int
-os_system_linux_netlink_addnetaddr(
-  struct os_system_netlink *nl, struct nlmsghdr *n, int type, const struct netaddr *addr) {
-  return os_system_linux_netlink_addreq(nl, n, type, netaddr_get_binptr(addr), netaddr_get_maxprefix(addr) / 8);
+os_system_linux_netlink_addnetaddr(struct os_system_netlink_message *nl_msg, int type, const struct netaddr *addr) {
+  return os_system_linux_netlink_addreq(nl_msg, type, netaddr_get_binptr(addr), netaddr_get_maxprefix(addr) / 8);
+}
+
+static INLINE bool
+os_system_linux_netlink_is_done(struct os_system_netlink_message *nl_msg) {
+  return !list_is_node_added(&nl_msg->_node);
+}
+
+static INLINE void
+os_system_linux_netlink_interrupt(struct os_system_netlink_message *nl_msg) {
+  if (list_is_node_added(&nl_msg->_node)) {
+    list_remove(&nl_msg->_node);
+  }
 }
 
 #endif /* OS_SYSTEM_LINUX_H_ */

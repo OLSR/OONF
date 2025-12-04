@@ -67,6 +67,8 @@ int dlep_writer_add_lid_length_tlv(struct dlep_writer *writer, uint16_t link_id_
 int dlep_writer_add_ip_tlv(struct dlep_writer *writer, const struct netaddr *ipv4, bool add);
 void dlep_writer_add_ipv4_conpoint_tlv(struct dlep_writer *writer, const struct netaddr *addr, uint16_t port, bool tls);
 void dlep_writer_add_ipv6_conpoint_tlv(struct dlep_writer *writer, const struct netaddr *addr, uint16_t port, bool tls);
+void dlep_writer_add_ipv4_dns_tlv(struct dlep_writer *writer, const union netaddr_socket *sock);
+void dlep_writer_add_ipv6_dns_tlv(struct dlep_writer *writer, const union netaddr_socket *sock);
 void dlep_writer_add_uint64(struct dlep_writer *writer, uint64_t number, enum dlep_tlvs tlv);
 void dlep_writer_add_int64(struct dlep_writer *writer, int64_t number, enum dlep_tlvs tlv);
 int dlep_writer_add_status(struct dlep_writer *writer, enum dlep_status status, const char *text);

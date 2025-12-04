@@ -74,16 +74,17 @@ static enum oonf_telnet_result _cb_olsrv2info(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _cb_olsrv2info_help(struct oonf_telnet_data *con);
 
 static void _initialize_originator_values(int af_type);
-static void _initialize_old_originator_values(struct olsrv2_originator_set_entry *);
+static void _initialize_old_originator_values(struct olsrv2_originator_set_entry *, bool raw);
 static void _initialize_domain_values(struct nhdp_domain *domain);
 static void _initialize_domain_link_metric_values(struct nhdp_domain *domain, uint32_t);
 static void _initialize_domain_distance(uint8_t);
 static void _initialize_lan_values(struct olsrv2_lan_entry *);
-static void _initialize_node_values(struct olsrv2_tc_node *);
+static void _initialize_node_values(struct olsrv2_tc_node *, bool raw);
 static void _initialize_attached_network_values(struct olsrv2_tc_attachment *edge);
 static void _initialize_edge_values(struct olsrv2_tc_edge *edge);
 static void _initialize_route_values(struct olsrv2_routing_entry *route);
 
+static int _cb_create_text_local(struct oonf_viewer_template *);
 static int _cb_create_text_originator(struct oonf_viewer_template *);
 static int _cb_create_text_old_originator(struct oonf_viewer_template *);
 static int _cb_create_text_lan(struct oonf_viewer_template *);
@@ -97,6 +98,21 @@ static int _cb_create_text_route(struct oonf_viewer_template *);
  *
  * The keys are API, so they should not be changed after published
  */
+
+/*! template key for local ANSN */
+#define KEY_LOCAL_ANSN "local_ansn"
+
+/*! template key for local TC interval time */
+#define KEY_LOCAL_ITIME "local_itime"
+
+/*! template key for local TC validity time */
+#define KEY_LOCAL_VTIME "local_vtime"
+
+/*! template key for local IPv4 originator */
+#define KEY_LOCAL_ORIG_V4 "local_orig4"
+
+/*! template key for local IPv6 originator */
+#define KEY_LOCAL_ORIG_V6 "local_orig6"
 
 /*! template key for originator IP */
 #define KEY_ORIGINATOR "originator"
@@ -201,6 +217,12 @@ static int _cb_create_text_route(struct oonf_viewer_template *);
  * buffer space for values that will be assembled
  * into the output of the plugin
  */
+static char _value_local_ansn[6];
+static struct isonumber_str _value_local_itime;
+static struct isonumber_str _value_local_vtime;
+static struct netaddr_str _value_local_orig4;
+static struct netaddr_str _value_local_orig6;
+
 static struct netaddr_str _value_originator;
 
 static struct netaddr_str _value_old_originator;
@@ -241,6 +263,14 @@ static char _value_route_ifindex[12];
 static struct netaddr_str _value_route_lasthop;
 
 /* definition of the template data entries for JSON and table output */
+static struct abuf_template_data_entry _tde_local[] = {
+  { KEY_LOCAL_ANSN, _value_local_ansn, true },
+  { KEY_LOCAL_ITIME, _value_local_itime.buf, false },
+  { KEY_LOCAL_VTIME, _value_local_vtime.buf, false },
+  { KEY_LOCAL_ORIG_V4, _value_local_orig4.buf, true },
+  { KEY_LOCAL_ORIG_V6, _value_local_orig6.buf, true }
+};
+
 static struct abuf_template_data_entry _tde_originator[] = {
   { KEY_ORIGINATOR, _value_originator.buf, true },
 };
@@ -312,6 +342,9 @@ static struct abuf_template_data_entry _tde_route[] = {
 static struct abuf_template_storage _template_storage;
 
 /* Template Data objects (contain one or more Template Data Entries) */
+static struct abuf_template_data _td_local[] = {
+  { _tde_local, ARRAYSIZE(_tde_local) },
+};
 static struct abuf_template_data _td_orig[] = {
   { _tde_originator, ARRAYSIZE(_tde_originator) },
 };
@@ -348,12 +381,19 @@ static struct abuf_template_data _td_route[] = {
 };
 
 /* OONF viewer templates (based on Template Data arrays) */
-static struct oonf_viewer_template _templates[] = { {
-                                                      .data = _td_orig,
-                                                      .data_size = ARRAYSIZE(_td_orig),
-                                                      .json_name = "originator",
-                                                      .cb_function = _cb_create_text_originator,
-                                                    },
+static struct oonf_viewer_template _templates[] = {
+  {
+    .data = _td_local,
+    .data_size = ARRAYSIZE(_td_local),
+    .json_name = "local",
+    .cb_function = _cb_create_text_local,
+  },
+  {
+    .data = _td_orig,
+    .data_size = ARRAYSIZE(_td_orig),
+    .json_name = "originator",
+    .cb_function = _cb_create_text_originator,
+  },
   {
     .data = _td_old_orig,
     .data_size = ARRAYSIZE(_td_old_orig),
@@ -466,10 +506,10 @@ _initialize_originator_values(int af_type) {
  * @param entry originator set entry
  */
 static void
-_initialize_old_originator_values(struct olsrv2_originator_set_entry *entry) {
+_initialize_old_originator_values(struct olsrv2_originator_set_entry *entry, bool raw) {
   netaddr_to_string(&_value_old_originator, &entry->originator);
 
-  oonf_clock_toIntervalString(&_value_old_originator_vtime, oonf_timer_get_due(&entry->_vtime));
+  oonf_timer_to_string_ext(&_value_old_originator_vtime, &entry->_vtime, raw);
 }
 
 /**
@@ -539,10 +579,10 @@ _initialize_lan_values(struct olsrv2_lan_entry *lan) {
  * @param node OLSRv2 node
  */
 static void
-_initialize_node_values(struct olsrv2_tc_node *node) {
+_initialize_node_values(struct olsrv2_tc_node *node, bool raw) {
   netaddr_to_string(&_value_node, &node->target.prefix.dst);
 
-  oonf_clock_toIntervalString(&_value_node_vtime, oonf_timer_get_due(&node->_validity_time));
+  oonf_timer_to_string_ext(&_value_node_vtime, &node->_validity_time, raw);
 
   snprintf(_value_node_ansn, sizeof(_value_node_ansn), "%u", node->ansn);
 
@@ -604,13 +644,34 @@ _cb_create_text_old_originator(struct oonf_viewer_template *template) {
   struct olsrv2_originator_set_entry *entry;
 
   avl_for_each_element(olsrv2_originator_get_tree(), entry, _node) {
-    _initialize_old_originator_values(entry);
+    _initialize_old_originator_values(entry, template->create_raw);
 
     /* generate template output */
     oonf_viewer_output_print_line(template);
   }
   return 0;
 }
+
+/**
+ * Display the local olsrv2 settings
+ * @param template oonf viewer template
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_cb_create_text_local(struct oonf_viewer_template *template) {
+  /* generate template output */
+  snprintf(_value_local_ansn, sizeof(_value_local_ansn), "%u", olsrv2_routing_get_ansn());
+
+  oonf_clock_toIntervalString_ext(&_value_local_itime, olsrv2_get_tc_interval(), template->create_raw);
+  oonf_clock_toIntervalString_ext(&_value_local_vtime, olsrv2_get_tc_validity(), template->create_raw);
+
+  netaddr_to_string(&_value_local_orig4, olsrv2_originator_get(AF_INET));
+  netaddr_to_string(&_value_local_orig6, olsrv2_originator_get(AF_INET6));
+
+  oonf_viewer_output_print_line(template);
+  return 0;
+}
+
 
 /**
  * Display the originator addresses of the local node
@@ -666,7 +727,7 @@ _cb_create_text_node(struct oonf_viewer_template *template) {
   struct olsrv2_tc_node *node;
 
   avl_for_each_element(olsrv2_tc_get_tree(), node, _originator_node) {
-    _initialize_node_values(node);
+    _initialize_node_values(node, template->create_raw);
 
     oonf_viewer_output_print_line(template);
   }
@@ -685,7 +746,7 @@ _cb_create_text_attached_network(struct oonf_viewer_template *template) {
   struct nhdp_domain *domain;
 
   avl_for_each_element(olsrv2_tc_get_tree(), node, _originator_node) {
-    _initialize_node_values(node);
+    _initialize_node_values(node, template->create_raw);
 
     if (olsrv2_tc_is_node_virtual(node)) {
       continue;
@@ -719,7 +780,7 @@ _cb_create_text_edge(struct oonf_viewer_template *template) {
   uint32_t metric;
 
   avl_for_each_element(olsrv2_tc_get_tree(), node, _originator_node) {
-    _initialize_node_values(node);
+    _initialize_node_values(node, template->create_raw);
 
     if (olsrv2_tc_is_node_virtual(node)) {
       continue;

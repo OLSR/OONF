@@ -65,4 +65,7 @@ int dlep_base_proto_process_heartbeat(struct dlep_extension *, struct dlep_sessi
 int dlep_base_proto_write_mac_only(struct dlep_extension *, struct dlep_session *session,
     const struct oonf_layer2_neigh_key *neigh);
 
+int dlep_base_proto_process_session_update(struct dlep_extension *ext, struct dlep_session *session);
+int dlep_base_proto_process_session_update_ack(struct dlep_extension *ext, struct dlep_session *session);
+
 #endif /* _PROTO_H_ */

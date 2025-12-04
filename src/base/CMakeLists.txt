@@ -1,5 +1,6 @@
 # create plugins for single-file (source plus header) subsystems
-SET(SINGLE_FILE_NAMES    class
+SET(SINGLE_FILE_NAMES    callback
+                         class
                          clock
                          duplicate_set
                          http

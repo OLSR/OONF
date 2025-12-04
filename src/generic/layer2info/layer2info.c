@@ -71,15 +71,17 @@ static void _cleanup(void);
 static enum oonf_telnet_result _cb_layer2info(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _cb_layer2info_help(struct oonf_telnet_data *con);
 
-static void _initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data);
+static void _initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net);
+static void _initialize_if_default_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net);
 static void _initialize_if_origin_values(struct oonf_layer2_data *data);
 static void _initialize_if_values(struct oonf_layer2_net *net);
 static void _initialize_if_ip_values(struct oonf_layer2_peer_address *peer_ip);
 
-static void _initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data);
+static void _initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_neigh *l2neigh);
 static void _initialize_neigh_origin_values(struct oonf_layer2_data *data);
 static void _initialize_neigh_values(struct oonf_layer2_neigh *neigh);
 static void _initialize_neigh_ip_values(struct oonf_layer2_neighbor_address *neigh_addr);
+static void _initialize_origin_values(struct oonf_layer2_origin *l2origin);
 
 static int _cb_create_text_interface(struct oonf_viewer_template *);
 static int _cb_create_text_interface_ip(struct oonf_viewer_template *);
@@ -87,6 +89,7 @@ static int _cb_create_text_neighbor(struct oonf_viewer_template *);
 static int _cb_create_text_neighbor_ip(struct oonf_viewer_template *);
 static int _cb_create_text_default(struct oonf_viewer_template *);
 static int _cb_create_text_dst(struct oonf_viewer_template *);
+static int _cb_create_text_origin(struct oonf_viewer_template *);
 
 /*
  * list of template keys and corresponding buffers for values.
@@ -166,6 +169,21 @@ static int _cb_create_text_dst(struct oonf_viewer_template *);
 /*! string suffix for all data originators */
 #define KEY_ORIGIN_SUFFIX "_origin"
 
+/*! template key for originator name */
+#define KEY_ORIGIN_NAME       "origin_name"
+
+/*! template key for origin is proactive */
+#define KEY_ORIGIN_PROACTIVE "origin_proactive"
+
+/*! template key for origin priority */
+#define KEY_ORIGIN_PRIORITY  "origin_priority"
+
+/*! template key for origin produces LIDs */
+#define KEY_ORIGIN_LID       "origin_lid"
+
+/*! template key for origin LID index */
+#define KEY_ORIGIN_LID_INDEX "origin_lid_index"
+
 /*
  * buffer space for values that will be assembled
  * into the output of the plugin
@@ -193,9 +211,13 @@ static struct netaddr_str _value_neigh_remote_ip_nexthop;
 static char _value_neigh_remote_ip_origin[IF_NAMESIZE];
 static char _value_neigh_data[OONF_LAYER2_NEIGH_COUNT][64];
 static char _value_neigh_origin[OONF_LAYER2_NEIGH_COUNT][IF_NAMESIZE];
-
 static struct netaddr_str _value_dst_addr;
 static char _value_dst_origin[IF_NAMESIZE];
+static char _value_origin_name[IF_NAMESIZE];
+static char _value_origin_proactive[TEMPLATE_JSON_BOOL_LENGTH];
+static char _value_origin_priority[10];
+static char _value_origin_lid[TEMPLATE_JSON_BOOL_LENGTH];
+static char _value_origin_lid_index[10];
 
 /* definition of the template data entries for JSON and table output */
 static struct abuf_template_data_entry _tde_if_key[] = {
@@ -248,6 +270,14 @@ static struct abuf_template_data_entry _tde_dst[] = {
   { KEY_DST_ORIGIN, _value_dst_origin, true },
 };
 
+static struct abuf_template_data_entry _tde_origin[] = {
+  { KEY_ORIGIN_NAME, _value_origin_name, true },
+  { KEY_ORIGIN_PROACTIVE, _value_origin_proactive, true },
+  { KEY_ORIGIN_PRIORITY, _value_origin_priority, false },
+  { KEY_ORIGIN_LID, _value_origin_lid, true },
+  { KEY_ORIGIN_LID_INDEX, _value_origin_lid_index, false },
+};
+
 static struct abuf_template_storage _template_storage;
 static struct autobuf _key_storage;
 
@@ -284,6 +314,9 @@ static struct abuf_template_data _td_dst[] = {
   { _tde_neigh_key, ARRAYSIZE(_tde_neigh_key) },
   { _tde_dst_key, ARRAYSIZE(_tde_dst_key) },
   { _tde_dst, ARRAYSIZE(_tde_dst) },
+};
+static struct abuf_template_data _td_origin[] = {
+  { _tde_origin, ARRAYSIZE(_tde_origin) },
 };
 
 /* OONF viewer templates (based on Template Data arrays) */
@@ -323,6 +356,12 @@ static struct oonf_viewer_template _templates[] = {
     .data_size = ARRAYSIZE(_td_dst),
     .json_name = "destination",
     .cb_function = _cb_create_text_dst,
+  },
+  {
+    .data = _td_origin,
+    .data_size = ARRAYSIZE(_td_origin),
+    .json_name = "origin",
+    .cb_function = _cb_create_text_origin,
   },
 };
 
@@ -472,16 +511,32 @@ _initialize_if_ip_values(struct oonf_layer2_peer_address *peer_ip) {
 /**
  * Initialize the value buffers for an array of layer2 data objects
  * @param template viewer template
- * @param data array of data objects
+ * @param l2net layer-2 network data
  */
 static void
-_initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data) {
+_initialize_if_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net) {
   size_t i;
 
   memset(_value_if_data, 0, sizeof(_value_if_data));
 
   for (i = 0; i < OONF_LAYER2_NET_COUNT; i++) {
-    oonf_layer2_net_data_to_string(_value_if_data[i], sizeof(_value_if_data[i]), &data[i], i, template->create_raw);
+    oonf_layer2_net_data_to_string(_value_if_data[i], sizeof(_value_if_data[i]), l2net, i, template->create_raw);
+  }
+}
+
+/**
+ * Initialize the value buffers for an array of layer2 data objects
+ * @param template viewer template
+ * @param l2net layer-2 network data
+ */
+static void
+_initialize_if_default_data_values(struct oonf_viewer_template *template, struct oonf_layer2_net *l2net) {
+  size_t i;
+
+  memset(_value_neigh_data, 0, sizeof(_value_neigh_data));
+
+  for (i = 0; i < OONF_LAYER2_NEIGH_COUNT; i++) {
+    oonf_layer2_net_default_data_to_string(_value_neigh_data[i], sizeof(_value_neigh_data[i]), l2net, i, template->create_raw);
   }
 }
 
@@ -538,17 +593,17 @@ _initialize_neigh_ip_values(struct oonf_layer2_neighbor_address *neigh_addr) {
 /**
  * Initialize the value buffers for an array of layer2 data objects
  * @param template viewer template
- * @param data array of data objects
+ * @param l2neigh layer-2 neighbor object
  */
 static void
-_initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_data *data) {
+_initialize_neigh_data_values(struct oonf_viewer_template *template, struct oonf_layer2_neigh *l2neigh) {
   size_t i;
 
   memset(_value_neigh_data, 0, sizeof(_value_neigh_data));
 
   for (i = 0; i < OONF_LAYER2_NEIGH_COUNT; i++) {
     oonf_layer2_neigh_data_to_string(
-      _value_neigh_data[i], sizeof(_value_neigh_data[i]), &data[i], i, template->create_raw);
+      _value_neigh_data[i], sizeof(_value_neigh_data[i]), l2neigh, i, template->create_raw);
   }
 }
 
@@ -580,6 +635,19 @@ _initialize_destination_values(struct oonf_layer2_destination *l2dst) {
 }
 
 /**
+ * Initialize the value buffers for a layer2 originator
+ * @param l2origin layer2 originator
+ */
+static void
+_initialize_origin_values(struct oonf_layer2_origin *l2origin) {
+  strscpy(_value_origin_name, l2origin->name, sizeof(_value_origin_name));
+  strscpy(_value_origin_proactive, json_getbool(l2origin->proactive), sizeof(_value_origin_proactive));
+  snprintf(_value_origin_priority, sizeof(_value_origin_priority), "%d", l2origin->priority);
+  strscpy(_value_origin_lid, json_getbool(l2origin->lid), sizeof(_value_origin_lid));
+  snprintf(_value_origin_lid_index, sizeof(_value_origin_lid_index), "%u", l2origin->lid_index);
+}
+
+/**
  * Callback to generate text/json description of all layer2 interfaces
  * @param template viewer template
  * @return -1 if an error happened, 0 otherwise
@@ -590,7 +658,7 @@ _cb_create_text_interface(struct oonf_viewer_template *template) {
 
   avl_for_each_element(oonf_layer2_get_net_tree(), net, _node) {
     _initialize_if_values(net);
-    _initialize_if_data_values(template, net->data);
+    _initialize_if_data_values(template, net);
     _initialize_if_origin_values(net->data);
 
     /* generate template output */
@@ -637,7 +705,7 @@ _cb_create_text_neighbor(struct oonf_viewer_template *template) {
 
     avl_for_each_element(&net->neighbors, neigh, _node) {
       _initialize_neigh_values(neigh);
-      _initialize_neigh_data_values(template, neigh->data);
+      _initialize_neigh_data_values(template, neigh);
       _initialize_neigh_origin_values(neigh->data);
 
       /* generate template output */
@@ -687,7 +755,7 @@ _cb_create_text_default(struct oonf_viewer_template *template) {
 
   avl_for_each_element(oonf_layer2_get_net_tree(), net, _node) {
     _initialize_if_values(net);
-    _initialize_neigh_data_values(template, net->neighdata);
+    _initialize_if_default_data_values(template, net);
     _initialize_neigh_origin_values(net->neighdata);
 
     /* generate template output */
@@ -720,6 +788,22 @@ _cb_create_text_dst(struct oonf_viewer_template *template) {
         oonf_viewer_output_print_line(template);
       }
     }
+  }
+  return 0;
+}
+
+/**
+ * Callback to generate text/json description of all layer2 destinations
+ * @param template viewer template
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_cb_create_text_origin(struct oonf_viewer_template *template) {
+  struct oonf_layer2_origin *l2origin;
+
+  avl_for_each_element(oonf_layer2_get_origin_tree(), l2origin, _node) {
+    _initialize_origin_values(l2origin);
+    oonf_viewer_output_print_line(template);
   }
   return 0;
 }

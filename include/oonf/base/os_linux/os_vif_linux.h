@@ -48,13 +48,7 @@
 
 #include <oonf/oonf.h>
 #include <oonf/base/os_vif.h>
-
-/**
- * Linux internal data for handling virtual interfaces (tun/tap)
- */
-struct os_vif_internal {
-  /* no internal data necessary */
-};
+#include <oonf/base/os_linux/os_vif_linux_data.h>
 
 EXPORT int os_vif_linux_open(struct os_fd *fd, struct os_vif *vif);
 EXPORT void os_vif_linux_close(struct os_vif *vif);

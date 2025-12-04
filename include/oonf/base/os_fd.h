@@ -46,6 +46,12 @@
 #ifndef OS_FD_H_
 #define OS_FD_H_
 
+#if 0
+/* pre-definition of structs */
+struct os_fd;
+struct os_fd_select;
+#endif
+
 #include <sys/select.h>
 #include <unistd.h>
 
@@ -57,12 +63,19 @@
 #include <oonf/base/oonf_timer.h>
 #include <oonf/base/os_interface.h>
 
+#include <oonf/base/os_fd_data.h>
+
+#if 0
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_fd_linux_data.h>
+#elif defined(BSD)
+#error "Unknown operation system"
+#endif
+#endif
+
 /*! subsystem identifier */
 #define OONF_OS_FD_SUBSYSTEM "os_fd"
-
-/* pre-definition of structs */
-struct os_fd;
-struct os_fd_select;
 
 /* pre-declare inlines */
 static INLINE int os_fd_init(struct os_fd *, int fd);
@@ -116,10 +129,6 @@ static INLINE uint8_t *os_fd_skip_rawsocket_prefix(uint8_t *ptr, ssize_t *len, i
 #if defined(__linux__)
 #include <oonf/base/os_linux/os_fd_linux.h>
 #elif defined(BSD)
-#include <oonf/base/os_bsd/os_fd_bsd.h>
-#elif defined(_WIN32)
-#include <oonf/base/os_win32/os_fd_win32.h>
-#else
 #error "Unknown operation system"
 #endif
 

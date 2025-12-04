@@ -43,12 +43,18 @@
  * @file
  */
 
-#ifndef DLEP_RADIO_INTERNAL_H_
-#define DLEP_RADIO_INTERNAL_H_
+#ifndef OS_FD_DATA_H_
+#define OS_FD_DATA_H_
 
-#include <oonf/libcore/oonf_logging.h>
+/* pre-definition of structs */
+struct os_fd;
+struct os_fd_select;
 
-/* headers only for use inside the DLEP_RADIO subsystem */
-extern enum oonf_log_source LOG_DLEP_RADIO;
+/* include os-specific headers */
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_fd_linux_data.h>
+#elif defined(BSD)
+#error "Unknown operation system"
+#endif
 
-#endif /* DLEP_RADIO_INTERNAL_H_ */
+#endif /* OS_FD_DATA_H_ */

@@ -48,6 +48,7 @@
 
 #include <oonf/oonf.h>
 #include <oonf/libcommon/netaddr.h>
+#include <oonf/base/oonf_layer2.h>
 #include <oonf/base/oonf_timer.h>
 
 #include <oonf/generic/dlep/dlep_interface.h>
@@ -68,6 +69,12 @@ struct dlep_router_if {
 
   /*! TCP port to directly connect router to */
   int32_t connect_to_port;
+
+  /* layer2 origin for this interface */
+  struct oonf_layer2_origin l2_origin;
+
+  /* layer2 origin for this interface default values*/
+  struct oonf_layer2_origin l2_default_origin;
 
   /* timer to make sure we stay connected */
   struct oonf_timer_instance _connect_to_watchdog;

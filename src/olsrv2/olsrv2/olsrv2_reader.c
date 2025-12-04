@@ -450,6 +450,7 @@ _handle_gateways(struct rfc5444_reader_tlvblock_entry *tlv, struct os_route_key 
   struct olsrv2_tc_attachment *end;
   struct nhdp_domain *domain;
   size_t i;
+  bool cleanup[NHDP_MAXIMUM_DOMAINS];
 
   /* check length */
   if (tlv->length > 1 && tlv->length < _current.mprtypes_size) {
@@ -488,11 +489,9 @@ _handle_gateways(struct rfc5444_reader_tlvblock_entry *tlv, struct os_route_key 
 
   end->ansn = _current.node->ansn;
 
-  if (_current.complete_tc) {
-    /* clear unused metrics */
-    for (i = 0; i < NHDP_MAXIMUM_DOMAINS; i++) {
-      end->cost[i] = RFC7181_METRIC_INFINITE;
-    }
+  /* clear unused metrics */
+  for (i = 0; i < NHDP_MAXIMUM_DOMAINS; i++) {
+    cleanup[i] = end->cost[i] != RFC7181_METRIC_INFINITE;
   }
 
   /* use MT definition of AN tlv */
@@ -503,7 +502,12 @@ _handle_gateways(struct rfc5444_reader_tlvblock_entry *tlv, struct os_route_key 
       continue;
     }
 
-    end->cost[domain->index] = cost_out[domain->index];
+    cleanup[domain->index] = false;
+
+    if (end->cost[domain->index] != cost_out[domain->index]) {
+        _current.changed[domain->index] = true;
+        end->cost[domain->index] = cost_out[domain->index];
+    }
 
     if (tlv->length == 1) {
       end->distance[domain->index] = tlv->single_value[0];
@@ -514,6 +518,13 @@ _handle_gateways(struct rfc5444_reader_tlvblock_entry *tlv, struct os_route_key 
 
     OONF_DEBUG(
       LOG_OLSRV2_R, "Address is Attached Network (domain %u): dist=%u", domain->ext, end->distance[domain->index]);
+  }
+
+  for (i = 0; i < NHDP_MAXIMUM_DOMAINS; i++) {
+    if (cleanup[i]) {
+      end->cost[i] = RFC7181_METRIC_INFINITE;
+      _current.changed[i] = true;
+    }
   }
 }
 

@@ -312,7 +312,9 @@ connect_to_error:
  */
 void
 oonf_stream_set_timeout(struct oonf_stream_session *con, uint64_t timeout) {
-  oonf_timer_set(&con->timeout, timeout);
+  if (oonf_clock_get_absolute(timeout) > oonf_timer_get_due(&con->timeout) + timeout/5) {
+    oonf_timer_set(&con->timeout, timeout);
+  }
 }
 
 /**
@@ -343,6 +345,9 @@ oonf_stream_add_managed(struct oonf_stream_managed *managed) {
   }
   if (managed->config.session_timeout == 0) {
     managed->config.session_timeout = 120000;
+  }
+  if (managed->config.acl == NULL) {
+    managed->config.acl = &managed->_managed_config.acl;
   }
 
   managed->_if_listener.if_changed = _cb_interface_listener;

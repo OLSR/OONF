@@ -385,6 +385,7 @@ _cb_if_value_validator(struct autobuf *out, const char *section_name, const char
   struct l2_config_data l2_data;
   const struct oonf_layer2_metadata *meta;
   union oonf_layer2_value dst;
+  int error;
 
   if (cfg_tobin_tokens(&l2_data, value, entries, entry_count, NULL)) {
     return -1;
@@ -392,11 +393,13 @@ _cb_if_value_validator(struct autobuf *out, const char *section_name, const char
 
   meta = oonf_layer2_net_metadata_get(l2_data.data_idx);
 
-  if (oonf_layer2_data_parse_string(&dst, meta, l2_data.txt_value)) {
+  if ((error = oonf_layer2_data_parse_string(&dst, meta, l2_data.txt_value))) {
     cfg_append_printable_line(out,
-      "Value '%s' for entry '%s' in section %s does not use the data"
-      " type %s for layer2 network key %s",
-      value, entry_name, section_name, oonf_layer2_data_get_type_string(meta), meta->key);
+        "Value '%s' for entry '%s' in section %s does not use the data"
+        " type '%s' for layer2 network key %s (%d)",
+        l2_data.txt_value, entry_name, section_name, oonf_layer2_data_get_type_string(meta),
+        meta->key, error);
+    return -1;
   }
   return 0;
 }
@@ -441,6 +444,7 @@ _cb_neigh_value_validator(struct autobuf *out, const char *section_name, const c
   struct l2_config_data l2_data;
   const struct oonf_layer2_metadata *meta;
   union oonf_layer2_value dst;
+  int error;
 
   if (cfg_tobin_tokens(&l2_data, value, entries, entry_count, NULL)) {
     return -1;
@@ -448,11 +452,13 @@ _cb_neigh_value_validator(struct autobuf *out, const char *section_name, const c
 
   meta = oonf_layer2_neigh_metadata_get(l2_data.data_idx);
 
-  if (oonf_layer2_data_parse_string(&dst, meta, l2_data.txt_value)) {
+  if ((error = oonf_layer2_data_parse_string(&dst, meta, l2_data.txt_value))) {
     cfg_append_printable_line(out,
-      "Value '%s' for entry '%s' in section %s does not use the data"
-      " type %s for layer2 neighbor key %s",
-      value, entry_name, section_name, oonf_layer2_data_get_type_string(meta), meta->key);
+        "Value '%s' for entry '%s' in section %s does not use the data"
+        " type '%s' for layer2 neighbor key %s (%d)",
+        l2_data.txt_value, entry_name, section_name, oonf_layer2_data_get_type_string(meta),
+        meta->key, error);
+    return -1;
   }
   return 0;
 }

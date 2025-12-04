@@ -67,8 +67,6 @@ static void _cb_cleanup_radio(struct dlep_session *);
 
 static enum dlep_parser_error _radio_process_peer_discovery(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _radio_process_session_init(struct dlep_extension *, struct dlep_session *);
-static enum dlep_parser_error _radio_process_session_update(struct dlep_extension *, struct dlep_session *);
-static enum dlep_parser_error _radio_process_session_update_ack(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _radio_process_destination_up_ack(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _radio_process_destination_down_ack(struct dlep_extension *, struct dlep_session *);
 static enum dlep_parser_error _radio_process_link_char_request(struct dlep_extension *, struct dlep_session *);
@@ -108,11 +106,11 @@ static struct dlep_extension_implementation _radio_signals[] = {
   },
   {
     .id = DLEP_SESSION_UPDATE,
-    .process = _radio_process_session_update,
+    .process = dlep_base_proto_process_session_update,
   },
   {
     .id = DLEP_SESSION_UPDATE_ACK,
-    .process = _radio_process_session_update_ack,
+    .process = dlep_base_proto_process_session_update_ack,
   },
   {
     .id = DLEP_SESSION_TERMINATION,
@@ -324,43 +322,6 @@ _radio_process_session_init(struct dlep_extension *ext __attribute__((unused)), 
 }
 
 /**
- * Process the peer update message
- * @param ext (this) dlep extension
- * @param session dlep session
- * @return -1 if an error happened, 0 otherwise
- */
-static enum dlep_parser_error
-_radio_process_session_update(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
-  /* we don't support IP address exchange with the router at the moment */
-  if (dlep_session_generate_signal_status(session, DLEP_SESSION_UPDATE_ACK, NULL, DLEP_STATUS_OKAY, "Success")) {
-    return DLEP_NEW_PARSER_INTERNAL_ERROR;
-  }
-  return DLEP_NEW_PARSER_OKAY;
-}
-
-/**
- * Process the peer update ack message
- * @param ext (this) dlep extension
- * @param session dlep session
- * @return always 0
- */
-static int
-_radio_process_session_update_ack(struct dlep_extension *ext __attribute__((unused)), struct dlep_session *session) {
-  dlep_base_proto_print_status(session);
-  if (session->_peer_state == DLEP_PEER_SEND_UPDATE) {
-    if (dlep_session_generate_signal(session, DLEP_SESSION_UPDATE, NULL)) {
-      // TODO: do we need to terminate here?
-      return DLEP_NEW_PARSER_INTERNAL_ERROR;
-    }
-    session->_peer_state = DLEP_PEER_WAIT_FOR_UPDATE_ACK;
-  }
-  else {
-    session->_peer_state = DLEP_PEER_IDLE;
-  }
-  return DLEP_NEW_PARSER_OKAY;
-}
-
-/**
  * Process the destination up ack message
  * @param ext (this) dlep extension
  * @param session dlep session
@@ -535,7 +496,7 @@ _l2_neigh_added(struct oonf_layer2_neigh *l2neigh, struct oonf_layer2_destinatio
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (l2dest && !radio_session->session.cfg.send_proxied) {
       continue;
     }
@@ -564,7 +525,7 @@ _l2_neigh_changed(
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (l2dest && !radio_session->session.cfg.send_proxied) {
       continue;
     }
@@ -618,7 +579,7 @@ _l2_neigh_removed(
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (l2dest && !radio_session->session.cfg.send_proxied) {
       continue;
     }
@@ -654,7 +615,7 @@ _cb_l2_net_changed(void *ptr) {
     return;
   }
 
-  avl_for_each_element(&radio_if->interf.session_tree, radio_session, _node) {
+  avl_for_each_element(&radio_if->interf.session_tree, radio_session, session._node) {
     if (radio_session->session.restrict_signal == DLEP_ALL_SIGNALS) {
       dlep_session_generate_signal(&radio_session->session, DLEP_SESSION_UPDATE, NULL);
     }

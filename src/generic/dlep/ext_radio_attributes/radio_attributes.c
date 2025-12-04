@@ -58,6 +58,7 @@ static const uint16_t _session_initack_tlvs[] = {
   DLEP_MCS_BY_PROBING,
   DLEP_RX_ONLY_UNICAST,
   DLEP_TX_ONLY_UNICAST,
+  DLEP_CAN_MULTIHOP,
 };
 
 /* peer update */
@@ -65,6 +66,7 @@ static const uint16_t _peer_session_tlvs[] = {
   DLEP_MCS_BY_PROBING,
   DLEP_RX_ONLY_UNICAST,
   DLEP_TX_ONLY_UNICAST,
+  DLEP_CAN_MULTIHOP,
 };
 
 /* supported signals of this extension */
@@ -90,6 +92,7 @@ static struct dlep_extension_tlv _tlvs[] = {
   { DLEP_MCS_BY_PROBING, 1, 1 },
   { DLEP_RX_ONLY_UNICAST, 1, 1 },
   { DLEP_TX_ONLY_UNICAST, 1, 1 },
+  { DLEP_CAN_MULTIHOP, 1, 1 },
 };
 
 static struct dlep_network_mapping _net_mappings[] = {
@@ -109,6 +112,13 @@ static struct dlep_network_mapping _net_mappings[] = {
   },
   {
     .dlep = DLEP_TX_ONLY_UNICAST,
+    .layer2 = OONF_LAYER2_NET_RADIO_MULTIHOP,
+    .length = 1,
+    .from_tlv = dlep_reader_map_identity,
+    .to_tlv = dlep_writer_map_identity,
+  },
+  {
+    .dlep = DLEP_CAN_MULTIHOP,
     .layer2 = OONF_LAYER2_NET_TX_ONLY_UNICAST,
     .length = 1,
     .from_tlv = dlep_reader_map_identity,

@@ -63,8 +63,10 @@
 #include <oonf/generic/dlep/dlep_session.h>
 #include <oonf/generic/dlep/dlep_writer.h>
 
-#include <oonf/generic/dlep/router/dlep_router.h>
 #include <oonf/generic/dlep/router/dlep_router_interface.h>
+#include <oonf/generic/dlep/router/dlep_router_session.h>
+#include <oonf/generic/dlep/dlep_internal.h>
+#include <oonf/generic/dlep/dlep.h>
 
 #include <oonf/generic/dlep/ext_base_ip/ip.h>
 #include <oonf/generic/dlep/ext_base_metric/metric.h>
@@ -73,8 +75,7 @@
 #include <oonf/generic/dlep/ext_l2_statistics/l2_statistics.h>
 #include <oonf/generic/dlep/ext_radio_attributes/radio_attributes.h>
 #include <oonf/generic/dlep/ext_lid/lid.h>
-#include <oonf/generic/dlep/router/dlep_router_internal.h>
-#include <oonf/generic/dlep/router/dlep_router_session.h>
+#include <oonf/generic/dlep/ext_dns/dns.h>
 
 static void _connect_to_setup(struct dlep_router_if *router_if);
 static void _check_connect_to(struct dlep_router_if *router_if);
@@ -83,23 +84,11 @@ static int _connect_to_if_changed(struct os_interface_listener *);
 static void _cb_check_connect_to_status(struct oonf_timer_instance *);
 
 static struct oonf_class _router_if_class = {
-  .name = "DLEP router interface",
+  .name = OONF_CLASS_DLEP_ROUTER_INTERFACE,
   .size = sizeof(struct dlep_router_if),
 };
 
 static bool _shutting_down;
-
-static struct oonf_layer2_origin _l2_origin = {
-  .name = "dlep router",
-  .proactive = true,
-  .priority = OONF_LAYER2_ORIGIN_RELIABLE,
-};
-
-static struct oonf_layer2_origin _l2_default_origin = {
-  .name = "dlep router defaults",
-  .proactive = false,
-  .priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
-};
 
 static struct oonf_timer_class _connect_to_watchdog_class = {
   .name = "connect_to watchdog",
@@ -115,20 +104,13 @@ void
 dlep_router_interface_init(void) {
   oonf_class_add(&_router_if_class);
 
-  dlep_extension_init();
-  dlep_session_init();
   dlep_router_session_init();
   dlep_base_proto_router_init();
-  dlep_base_metric_init();
-  dlep_base_ip_init();
-  dlep_l1_statistics_init();
-  dlep_l2_statistics_init();
-  dlep_radio_attributes_init();
   dlep_lid_init();
+  dlep_dns_init();
 
   _shutting_down = false;
 
-  oonf_layer2_origin_add(&_l2_origin);
   oonf_timer_add(&_connect_to_watchdog_class);
 }
 
@@ -146,10 +128,7 @@ dlep_router_interface_cleanup(void) {
 
   oonf_class_remove(&_router_if_class);
 
-  dlep_base_ip_cleanup();
   dlep_router_session_cleanup();
-  dlep_extension_cleanup();
-  oonf_layer2_origin_remove(&_l2_origin);
   oonf_timer_remove(&_connect_to_watchdog_class);
 }
 
@@ -190,6 +169,7 @@ dlep_router_get_by_datapath_if(const char *ifname) {
 struct dlep_router_if *
 dlep_router_add_interface(const char *ifname) {
   struct dlep_router_if *interface;
+  char buffer[64];
 
   interface = dlep_router_get_by_layer2_if(ifname);
   if (interface) {
@@ -202,7 +182,20 @@ dlep_router_add_interface(const char *ifname) {
     return NULL;
   }
 
-  if (dlep_if_add(&interface->interf, ifname, &_l2_origin, &_l2_default_origin, _connect_to_if_changed, LOG_DLEP_ROUTER, false)) {
+  snprintf(buffer, sizeof(buffer), "dlep_rt_%s", ifname);
+  interface->l2_origin.name = strdup(buffer);
+  interface->l2_origin.priority = OONF_LAYER2_ORIGIN_RELIABLE,
+  interface->l2_origin.proactive = true;
+  oonf_layer2_origin_add(&interface->l2_origin);
+
+  snprintf(buffer, sizeof(buffer), "dlep_rtd_%s", ifname);
+  interface->l2_default_origin.name = strdup(buffer);
+  interface->l2_default_origin.priority = OONF_LAYER2_ORIGIN_UNRELIABLE,
+  interface->l2_default_origin.proactive = false;
+  oonf_layer2_origin_add(&interface->l2_origin);
+
+  if (dlep_if_add(&interface->interf, ifname, &interface->l2_origin,
+      &interface->l2_default_origin, _connect_to_if_changed, LOG_DLEP_ROUTER, false)) {
     oonf_class_free(&_router_if_class, interface);
     return NULL;
   }
@@ -269,7 +262,7 @@ dlep_router_terminate_all_sessions(void) {
   _shutting_down = true;
 
   avl_for_each_element(dlep_if_get_tree(false), interf, interf._node) {
-    avl_for_each_element(&interf->interf.session_tree, router_session, _node) {
+    avl_for_each_element(&interf->interf.session_tree, router_session, session._node) {
       dlep_session_terminate(&router_session->session, DLEP_STATUS_OKAY, "DLEP router is shutting down");
     }
   }
@@ -315,7 +308,7 @@ _cleanup_interface(struct dlep_router_if *interface) {
   struct dlep_router_session *stream, *it;
 
   /* close TCP connection and socket */
-  avl_for_each_element_safe(&interface->interf.session_tree, stream, _node, it) {
+  avl_for_each_element_safe(&interface->interf.session_tree, stream, session._node, it) {
     dlep_router_remove_session(stream);
   }
 }
@@ -333,7 +326,7 @@ _check_connect_to(struct dlep_router_if *router_if) {
     return;
   }
 
-  connect_to_session = dlep_router_get_session(router_if, &router_if->connect_to);
+  connect_to_session = dlep_router_get_if_session(router_if, &router_if->connect_to);
   if (connect_to_session != NULL
     && (connect_to_session->session._peer_state == DLEP_PEER_NOT_CONNECTED
     || connect_to_session->session._peer_state == DLEP_PEER_TERMINATED)) {

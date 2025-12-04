@@ -79,6 +79,12 @@
 /*! name of domain command/json-object */
 #define JSON_NAME_DOMAIN "domain"
 
+/*! name of domain command/json-object */
+#define JSON_NAME_ID "id"
+
+/*! name of domain command/json-object */
+#define JSON_NAME_LINK "link"
+
 /*! Text buffer for a domain id string */
 struct domain_id_str {
   /*! string buffer */
@@ -132,10 +138,13 @@ static void _create_graph_json(struct json_session *session, const char *filter)
 static void _print_routing_tree(struct json_session *session, struct nhdp_domain *domain, int af_type);
 static void _create_route_json(struct json_session *session, const char *filter);
 static void _create_domain_json(struct json_session *session);
+static void _create_id_json(struct json_session *session);
 static void _create_error_json(struct json_session *session, const char *message, const char *parameter);
 static enum oonf_telnet_result _cb_netjsoninfo(struct oonf_telnet_data *con);
 static void _print_json_string(struct json_session *session, const char *key, const char *value);
-static void _print_json_number(struct json_session *session, const char *key, uint64_t value);
+static void _print_json_bool(struct json_session *session, const char *key, bool value);
+static void _print_json_integer(struct json_session *session, const char *key, uint64_t value);
+static void _print_json_number(struct json_session *session, const char *key, const char *value);
 static void _print_json_netaddr(struct json_session *session, const char *key, const struct netaddr *addr);
 
 /* telnet command of this plugin */
@@ -149,7 +158,9 @@ static struct oonf_telnet_command _telnet_commands[] = {
     "The filter prefix use an id (which can be queried by 'domain') to output"
     " a single domain of route/graph without the NetworkCollection object"
     " around it. The domain_id's are ipv4_<domain_number> and ipv6_<domain_number>.\n"
-    "> netjsoninfo filter route ipv4_0\n"),
+    "> netjsoninfo filter route ipv4_0\n"
+    "Netjsoninfo 'id' returns a list of router/prefix id's to the corresponding\n"
+    "IPs/prefixes\n"),
 };
 
 /* plugin declaration */
@@ -475,14 +486,14 @@ _print_edge_links(
     _print_json_netaddr(session, "target_addr", &lnk->if_addr);
 
     cost = nhdp_domain_get_linkdata(domain, lnk)->metric.out;
-    _print_json_number(session, "cost", cost);
+        _print_json_integer(session, "cost", cost);
     _print_json_string(session, "cost_text", nhdp_domain_get_link_metric_value(&mbuf, domain, cost));
 
     cost = nhdp_domain_get_linkdata(domain, lnk)->metric.in;
-    _print_json_number(session, "in_cost", cost);
+        _print_json_integer(session, "in_cost", cost);
     _print_json_string(session, "in_text", nhdp_domain_get_link_metric_value(&mbuf, domain, cost));
 
-    _print_json_string(session, "outgoing_tree", json_getbool(outgoing && best_link == lnk));
+    _print_json_bool(session, "outgoing_tree", outgoing && best_link == lnk);
 
     json_end_object(session);
   }
@@ -520,15 +531,15 @@ _print_graph_edge(struct json_session *session, struct nhdp_domain *domain, cons
   _print_json_string(session, "source", src->buf);
   _print_json_string(session, "target", dst->buf);
 
-  _print_json_number(session, "cost", out);
+    _print_json_integer(session, "cost", out);
   _print_json_string(session, "cost_text", nhdp_domain_get_link_metric_value(&mbuf, domain, out));
 
   json_start_object(session, "properties");
   if (in >= RFC7181_METRIC_MIN && in <= RFC7181_METRIC_MAX) {
-    _print_json_number(session, "in_cost", in);
+        _print_json_integer(session, "in_cost", in);
     _print_json_string(session, "in_text", nhdp_domain_get_link_metric_value(&mbuf, domain, in));
   }
-  _print_json_string(session, "outgoing_tree", json_getbool(outgoing_tree));
+  _print_json_bool(session, "outgoing_tree", outgoing_tree);
 
   if (src_addr) {
     _print_json_netaddr(session, "source_addr", src_addr);
@@ -537,7 +548,7 @@ _print_graph_edge(struct json_session *session, struct nhdp_domain *domain, cons
     _print_json_netaddr(session, "target_addr", dst_addr);
   }
   if (hopcount) {
-    _print_json_number(session, "hopcount", hopcount);
+        _print_json_integer(session, "hopcount", hopcount);
   }
 
   switch (type) {
@@ -792,7 +803,7 @@ _print_routing_tree(struct json_session *session, struct nhdp_domain *domain, in
   _print_json_netaddr(session, "router_addr", originator);
   json_end_object(session);
 
-  json_start_array(session, JSON_NAME_ROUTE);
+  json_start_array(session, "routes");
 
   avl_for_each_element(olsrv2_routing_get_tree(domain), rtentry, _node) {
     if (rtentry->route.p.family == af_type) {
@@ -808,7 +819,7 @@ _print_routing_tree(struct json_session *session, struct nhdp_domain *domain, in
       _print_json_netaddr(session, "next", &rtentry->route.p.gw);
 
       _print_json_string(session, "device", if_indextoname(rtentry->route.p.if_index, ibuf));
-      _print_json_number(session, "cost", rtentry->path_cost);
+            _print_json_integer(session, "cost", rtentry->path_cost);
       _print_json_string(
         session, "cost_text", nhdp_domain_get_path_metric_value(&mbuf, domain, rtentry->path_cost, rtentry->path_hops));
 
@@ -820,7 +831,7 @@ _print_routing_tree(struct json_session *session, struct nhdp_domain *domain, in
       _print_json_string(session, "next_router_id", idbuf.buf);
       _print_json_netaddr(session, "next_router_addr", &rtentry->next_originator);
 
-      _print_json_number(session, "hops", rtentry->path_hops);
+            _print_json_integer(session, "hops", rtentry->path_hops);
 
       _get_node_id(&idbuf, &rtentry->last_originator, NULL);
       _print_json_string(session, "last_router_id", idbuf.buf);
@@ -879,7 +890,7 @@ _create_domain_json(struct json_session *session) {
       json_start_object(session, NULL);
 
       _print_json_string(session, "id", _create_domain_id(&dbuf, domain, AF_INET));
-      _print_json_number(session, "number", domain->ext);
+            _print_json_integer(session, "number", domain->ext);
 
       _get_node_id_me(&idbuf, AF_INET);
       _print_json_string(session, "router_id", idbuf.buf);
@@ -894,7 +905,7 @@ _create_domain_json(struct json_session *session) {
       json_start_object(session, NULL);
 
       _print_json_string(session, "id", _create_domain_id(&dbuf, domain, AF_INET6));
-      _print_json_number(session, "number", domain->ext);
+            _print_json_integer(session, "number", domain->ext);
 
       _get_node_id_me(&idbuf, AF_INET6);
       _print_json_string(session, "router_id", idbuf.buf);
@@ -908,6 +919,244 @@ _create_domain_json(struct json_session *session) {
 
   json_end_array(session);
   json_end_object(session);
+}
+
+static void
+_create_id_json(struct json_session *session) {
+  struct olsrv2_tc_node *tc_node;
+  struct _node_id_str node_id_str;
+
+  avl_for_each_element(olsrv2_tc_get_tree(), tc_node, _originator_node) {
+    json_start_object(session, NULL);
+
+    _print_json_string(session, "type", "NetworkId");
+    _print_json_string(session, "protocol", "olsrv2");
+    _print_json_string(session, "version", oonf_log_get_libdata()->version);
+    _print_json_string(session, "revision", oonf_log_get_libdata()->git_commit);
+
+    _print_json_string(session, "netjson_id", _get_tc_node_id(&node_id_str, tc_node));
+
+    json_start_array(session, "addresses");
+    _print_json_netaddr(session, NULL, &tc_node->target.prefix.dst);
+    json_end_array(session);
+
+    json_end_object(session);
+  }
+}
+
+static void
+_print_layer2_data(struct json_session *session, const struct oonf_layer2_data *l2data,
+                   const struct oonf_layer2_metadata *l2metadata) {
+  char value_buffer[64];
+
+  switch (l2metadata->type) {
+    case OONF_LAYER2_INTEGER_DATA:
+      _print_json_number(session, l2metadata->key,
+        oonf_layer2_data_to_string(value_buffer, sizeof(value_buffer), l2data, l2metadata, true));
+      break;
+    case OONF_LAYER2_BOOLEAN_DATA:
+      _print_json_bool(session, l2metadata->key, l2data->_value.boolean);
+      break;
+    case OONF_LAYER2_DATA_TYPE_COUNT:
+      _print_json_netaddr(session, l2metadata->key, &l2data->_value.addr);
+      break;
+    default:
+      break;
+  }
+}
+
+static void
+_print_layer2_neighbor(struct json_session *session, struct oonf_layer2_neigh *l2neigh) {
+  const struct oonf_layer2_metadata *l2metadata;
+  struct oonf_layer2_neighbor_address *l2naddr;
+  struct oonf_layer2_destination *l2dest;
+  struct oonf_layer2_data *l2data;
+  struct isonumber_str ibuf;
+  char hexbuf[64];
+  enum oonf_layer2_neighbor_index neigh_idx;
+
+  json_start_object(session, NULL);
+
+  if (netaddr_cmp(&l2neigh->key.addr, &l2neigh->network->if_listener.data->mac) != 0) {
+    _print_json_netaddr(session, "radio_mac", &l2neigh->key.addr);
+  }
+  if (strhex_from_bin(hexbuf, sizeof(hexbuf),
+      l2neigh->key.link_id, l2neigh->key.link_id_length) > 0) {
+    _print_json_string(session, "radio_link_id", hexbuf);
+  }
+  if (!avl_is_empty(&l2neigh->destinations)) {
+    json_start_array(session, "secondary_mac");
+    avl_for_each_element(&l2neigh->destinations, l2dest, _node) {
+      _print_json_netaddr(session, NULL, &l2dest->destination);
+    }
+    json_end_array(session);
+  }
+
+  if (!avl_is_empty(&l2neigh->remote_neighbor_ips)) {
+    json_start_array(session, "secondary_ip");
+    avl_for_each_element(&l2neigh->remote_neighbor_ips, l2naddr, _neigh_node) {
+      _print_json_netaddr(session, NULL, &l2naddr->ip);
+    }
+    json_end_array(session);
+  }
+
+  _print_json_number(session, "last_seen",
+    oonf_clock_toIntervalString(&ibuf,
+      -oonf_clock_get_relative(oonf_layer2_neigh_get_lastseen(l2neigh))));
+
+  json_start_object(session, "neighbor_data");
+  for (neigh_idx=0; neigh_idx < OONF_LAYER2_NEIGH_COUNT; neigh_idx++) {
+    l2data = &l2neigh->data[neigh_idx];
+    l2metadata = oonf_layer2_neigh_metadata_get(neigh_idx);
+
+    if (!oonf_layer2_data_has_value(l2data)) {
+      continue;
+    }
+    _print_layer2_data(session, l2data, l2metadata);
+  }
+  json_end_object(session);
+  json_end_object(session);
+}
+
+static void
+_print_rf_band(struct json_session *session, int64_t f, int64_t b, const char *mode) {
+  if (f > 0 || b > 0) {
+    json_start_object(session, NULL);
+    if (f > 0) {
+      _print_json_integer(session, "center", f);
+    }
+    if (b > 0) {
+      _print_json_integer(session, "bandwidth", b);
+    }
+    if (mode) {
+      _print_json_string(session, "mode", mode);
+    }
+  }
+}
+
+static void
+_print_link_network(struct json_session *session, struct oonf_layer2_net *l2net) {
+  const struct oonf_layer2_metadata *l2metadata;
+  struct oonf_layer2_peer_address *l2peer;
+  struct oonf_layer2_data *l2data;
+  struct oonf_layer2_neigh *l2neigh;
+  struct os_interface_ip *os_ip;
+  struct os_interface *os_if;
+  struct isonumber_str ibuf;
+  struct netaddr_str nbuf;
+  struct _node_id_str idbuf;
+  bool is_updown;
+  int64_t f1, f2, b1, b2;
+  enum oonf_layer2_network_index net_idx;
+  enum oonf_layer2_neighbor_index neigh_idx;
+
+  os_if = l2net->if_listener.data;
+
+  json_start_object(session, NULL);
+
+  _print_json_string(session, "type", "NetworkLink");
+  _print_json_string(session, "protocol", "olsrv2");
+  _print_json_string(session, "version", oonf_log_get_libdata()->version);
+  _print_json_string(session, "revision", oonf_log_get_libdata()->git_commit);
+
+  _print_json_string(session, "router_id", _get_node_id_me(&idbuf, AF_INET));
+  _print_json_string(session, "interface_name", l2net->name);
+  if (l2net->if_type != OONF_LAYER2_TYPE_UNDEFINED) {
+    _print_json_string(session, "interface_type",
+                       oonf_layer2_net_get_type_name(l2net->if_type));
+  }
+  if (!netaddr_is_unspec(&os_if->mac)) {
+    _print_json_string(session, "interface_mac", netaddr_to_string(&nbuf, &os_if->mac));
+  }
+  if (!avl_is_empty(&os_if->addresses)) {
+    json_start_array(session, "interface_ip");
+    avl_for_each_element(&os_if->addresses, os_ip, _node) {
+      _print_json_string(session, NULL, netaddr_to_string(&nbuf, &os_ip->prefixed_addr));
+    }
+    json_end_array(session);
+  }
+  _print_json_bool(session, "dlep", l2net->if_dlep);
+  _print_json_number(session, "last_seen",
+      oonf_clock_toIntervalString(&ibuf, -oonf_clock_get_relative(l2net->last_seen)));
+
+  if (!avl_is_empty(&l2net->local_peer_ips)) {
+    json_start_array(session, "local_radio_ip");
+
+    avl_for_each_element(&l2net->local_peer_ips, l2peer, _net_node) {
+      _print_json_string(session, NULL, netaddr_to_string(&nbuf, &l2peer->ip));
+    }
+    json_end_array(session);
+  }
+
+  f1 = 0;
+  f2 = 0;
+  b1 = 0;
+  b2 = 0;
+  is_updown = false;
+  json_start_object(session, "interface_data");
+  for (net_idx=0; net_idx < OONF_LAYER2_NET_COUNT; net_idx++) {
+    l2data = &l2net->data[net_idx];
+    l2metadata = oonf_layer2_net_metadata_get(net_idx);
+
+    if (!oonf_layer2_data_has_value(l2data)) {
+      continue;
+    }
+    if (net_idx == OONF_LAYER2_NET_BANDWIDTH_1) {
+      b1 = oonf_layer2_data_get_int64(l2data, l2metadata->scaling, 0);
+    }
+    else if (net_idx == OONF_LAYER2_NET_BANDWIDTH_2) {
+      b2 = oonf_layer2_data_get_int64(l2data, l2metadata->scaling, 0);
+    }
+    else if (net_idx == OONF_LAYER2_NET_FREQUENCY_1) {
+      f1 = oonf_layer2_data_get_int64(l2data, l2metadata->scaling, 0);
+    }
+    else if (net_idx == OONF_LAYER2_NET_FREQUENCY_2) {
+      f2 = oonf_layer2_data_get_int64(l2data, l2metadata->scaling, 0);
+    }
+    else if (net_idx == OONF_LAYER2_NET_BAND_UP_DOWN) {
+      is_updown = true;
+    }
+    else {
+      _print_layer2_data(session, l2data, l2metadata);
+    }
+  }
+
+  if (f1 > 0 || f2 > 0 || b1 > 0 || b2 > 0) {
+    json_start_array(session, "rf_band");
+    _print_rf_band(session, f1, b1, is_updown ? "tx" : NULL);
+    _print_rf_band(session, f2, b2, is_updown ? "rx" : NULL);
+    json_end_array(session);
+  }
+  json_end_object(session);
+
+  json_start_object(session, "neighbor_defaults");
+  for (neigh_idx=0; neigh_idx < OONF_LAYER2_NEIGH_COUNT; neigh_idx++) {
+    l2data = &l2net->neighdata[neigh_idx];
+    l2metadata = oonf_layer2_neigh_metadata_get(neigh_idx);
+
+    if (!oonf_layer2_data_has_value(l2data)) {
+      continue;
+    }
+    _print_layer2_data(session, l2data, l2metadata);
+  }
+  json_end_object(session);
+
+  json_start_array(session, "neighbors");
+  avl_for_each_element(&l2net->neighbors, l2neigh, _node) {
+    _print_layer2_neighbor(session, l2neigh);
+  }
+  json_end_array(session);
+
+  json_end_object(session);
+}
+
+static void
+_create_link_json(struct json_session *session) {
+  struct oonf_layer2_net *l2net;
+
+  avl_for_each_element(oonf_layer2_get_net_tree(), l2net, _node) {
+    _print_link_network(session, l2net);
+  }
 }
 
 /**
@@ -939,6 +1188,12 @@ _handle_netjson_object(struct json_session *session, const char *parameter, bool
   }
   else if (!filter && (ptr = str_hasnextword(parameter, JSON_NAME_DOMAIN))) {
     _create_domain_json(session);
+  }
+  else if (!filter && (ptr = str_hasnextword(parameter, JSON_NAME_ID))) {
+    _create_id_json(session);
+  }
+  else if (!filter && (ptr = str_hasnextword(parameter, JSON_NAME_LINK))) {
+    _create_link_json(session);
   }
   else {
     ptr = str_skipnextword(parameter);
@@ -1025,17 +1280,39 @@ _print_json_string(struct json_session *session, const char *key, const char *va
 }
 
 /**
- * Helper to print a json number
+ * Helper to print a json boolean
+ * @param session json session
+ * @param key json key
+ * @param value boolean value
+ */
+static void
+_print_json_bool(struct json_session *session, const char *key, bool value) {
+  json_print(session, key, false, json_getbool(value));
+}
+
+/**
+ * Helper to print a json integer
  * @param session json session
  * @param key json key
  * @param value number
  */
 static void
-_print_json_number(struct json_session *session, const char *key, uint64_t value) {
+_print_json_integer(struct json_session *session, const char *key, uint64_t value) {
   char buffer[21];
 
   snprintf(buffer, sizeof(buffer), "%" PRIu64, value);
   json_print(session, key, false, buffer);
+}
+
+/**
+ * Helper to print a json number
+ * @param session json session
+ * @param key json key
+ * @param value number (as a string)
+ */
+static void
+_print_json_number(struct json_session *session, const char *key, const char *value) {
+  json_print(session, key, false, value);
 }
 
 /**

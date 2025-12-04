@@ -46,46 +46,17 @@
 #ifndef OONF_SOCKET_H_
 #define OONF_SOCKET_H_
 
-#include <oonf/libcommon/avl.h>
+struct oonf_socket_entry;
+
 #include <oonf/oonf.h>
+#include <oonf/libcommon/avl.h>
 #include <oonf/libcommon/list.h>
 #include <oonf/libcommon/netaddr_acl.h>
 #include <oonf/base/os_fd.h>
+#include <oonf/base/oonf_socket_data.h>
 
 /*! subsystem identifier */
 #define OONF_SOCKET_SUBSYSTEM "socket"
-
-/**
- * registered socket handler
- */
-struct oonf_socket_entry {
-  /*! name of socket handler */
-  const char *name;
-
-  /*! file descriptor of the socket */
-  struct os_fd fd;
-
-  /**
-   * Callback when read or write event happens to socket
-   * @param fd file descriptor of socket
-   */
-  void (*process)(struct oonf_socket_entry *entry);
-
-  /*! usage counter, will be increased every times the socket receives data */
-  uint32_t _stat_recv;
-
-  /*! usage counter, will be increased every times the socket sends data */
-  uint32_t _stat_send;
-
-  /*!
-   * usage counter, will be increased every times a socket processing takes
-   * more than a TIMER slice
-   */
-  uint32_t _stat_long;
-
-  /*! list of socket handlers */
-  struct list_entity _node;
-};
 
 EXPORT void oonf_socket_add(struct oonf_socket_entry *);
 EXPORT void oonf_socket_remove(struct oonf_socket_entry *);

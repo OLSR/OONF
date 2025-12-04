@@ -56,11 +56,7 @@
 #define OONF_OS_CLOCK_SUBSYSTEM "os_clock"
 
 #if defined(__linux__)
-#include <oonf/base/os_linux/os_clock_linux.h>
-#elif defined(BSD)
-#include <oonf/base/os_bsd/os_clock_bsd.h>
-#elif defined(_WIN32)
-#include <oonf/base/os_win32/os_clock_win32.h>
+#include <oonf/base/os_linux/os_clock_linux_data.h>
 #else
 #error "Unknown operation system"
 #endif
@@ -68,5 +64,11 @@
 /* prototypes for all os_system functions */
 static INLINE int os_clock_gettime64_ns(uint64_t *t64);
 static INLINE int os_clock_gettime64(uint64_t *t64);
+
+#if defined(__linux__)
+#include <oonf/base/os_linux/os_clock_linux.h>
+#else
+#error "Unknown operation system"
+#endif
 
 #endif /* OS_CLOCK_H_ */
