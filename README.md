@@ -1,3 +1,7 @@
+News 4th of Dec 2025: Kindly use the master-Branch for your project again.
+
+-------
+
 # How to Install
 
 See http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework for a longer explanation. This README is the short version.
