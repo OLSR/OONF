@@ -1,10 +1,10 @@
-News 4th of Dec 2025: Kindly use the master-Branch for your project again.
+# Main website
 
--------
+Find latest information about OLSR (olsrd, olsrd2) at https://www.olsr.org/
 
 # How to Install
 
-See http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework for a longer explanation. This README is the short version.
+See https://web.archive.org/web/20151122031434/http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework for a longer explanation. This README is the short version.
 
 ## Installing from source
 
@@ -16,7 +16,7 @@ Get your code from the OLSR.org Network Framework GitHub:
 ### Pre-requisites
 
 Download and install the neccessary build requirements
-(see http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework#Requirements)
+(see https://web.archive.org/web/20151122031434/http://www.olsr.org/mediawiki/index.php/OLSR.org_Network_Framework#Requirements)
 
 For Debian you will mostly need the following ones:
   * cmake: ``sudo apt-get install cmake``
@@ -48,4 +48,4 @@ You should now see some output which shows you the info from the hello packets.
 
 ## How to proceed from here
 
-If you managed to start olsrd2 and see some output, you made it! Now is the time to review the detailed configuration setups at http://www.olsr.org/mediawiki/index.php/OLSR_network_deployments 
+If you managed to start olsrd2 and see some output, you made it! Now is the time to review the detailed configuration setups at https://web.archive.org/web/20151122031434/http://www.olsr.org/mediawiki/index.php/OLSR_network_deployments 
